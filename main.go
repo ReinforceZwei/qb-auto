@@ -3,7 +3,9 @@ package main
 import (
 	"log"
 
+	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/routes"
+	"github.com/joho/godotenv"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
@@ -13,6 +15,14 @@ import (
 )
 
 func main() {
+	// Load .env file if present (non-fatal when missing — production uses real env vars)
+	_ = godotenv.Load()
+
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	app := pocketbase.New()
 
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
@@ -21,7 +31,7 @@ func main() {
 	})
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
-		routes.RegisterTorrentRoutes(se)
+		routes.RegisterTorrentRoutes(se, cfg)
 		return se.Next()
 	})
 

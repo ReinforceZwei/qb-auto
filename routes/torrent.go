@@ -3,12 +3,13 @@ package routes
 import (
 	"net/http"
 
+	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/services"
 	"github.com/pocketbase/pocketbase/core"
 )
 
 // RegisterTorrentRoutes registers torrent-related API routes on the serve event.
-func RegisterTorrentRoutes(se *core.ServeEvent) {
+func RegisterTorrentRoutes(se *core.ServeEvent, cfg *config.Config) {
 	se.Router.GET("/api/torrent-complete", func(e *core.RequestEvent) error {
 		hash := e.Request.URL.Query().Get("hash")
 		if hash == "" {

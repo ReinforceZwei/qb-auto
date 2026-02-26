@@ -31,6 +31,9 @@ type Config struct {
 
 	// rsync / NAS
 	NASDestPath string // NAS_DEST_PATH (e.g. user@nas:/volume1/anime)
+
+	// Workers
+	TitleWorkerCount int // TITLE_WORKER_COUNT (defaults to 1)
 }
 
 var required = []string{
@@ -61,6 +64,18 @@ func Load() (*Config, error) {
 		quiInstanceID = parsed
 	}
 
+	titleWorkerCount := 1
+	if raw := os.Getenv("TITLE_WORKER_COUNT"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid TITLE_WORKER_COUNT: %w", err)
+		}
+		if parsed < 1 {
+			return nil, fmt.Errorf("TITLE_WORKER_COUNT must be at least 1")
+		}
+		titleWorkerCount = parsed
+	}
+
 	return &Config{
 		LLMBaseURL:       os.Getenv("LLM_BASE_URL"),
 		LLMAPIKey:        os.Getenv("LLM_API_KEY"),
@@ -74,5 +89,6 @@ func Load() (*Config, error) {
 		AnimeListPassword: os.Getenv("ANIMELIST_PASSWORD"),
 		WebhookURL:       os.Getenv("WEBHOOK_URL"),
 		NASDestPath:      os.Getenv("NAS_DEST_PATH"),
+		TitleWorkerCount: titleWorkerCount,
 	}, nil
 }

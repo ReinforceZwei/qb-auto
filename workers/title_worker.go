@@ -2,7 +2,6 @@ package workers
 
 import (
 	"context"
-	"log"
 
 	"github.com/ReinforceZwei/qb-auto/clients/animelist"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
@@ -58,7 +57,7 @@ func (w *TitleWorker) Register() {
 			select {
 			case w.jobCh <- record.Id:
 			default:
-				log.Printf("title_worker: job queue full, dropping job %s", record.Id)
+				w.app.Logger().Warn("title_worker: job queue full, dropping job", "jobId", record.Id)
 			}
 		}
 		return e.Next()
@@ -83,7 +82,7 @@ func (w *TitleWorker) Start(ctx context.Context) {
 			}
 		}()
 	}
-	log.Printf("title_worker: started %d worker(s)", w.cfg.TitleWorkerCount)
+	w.app.Logger().Info("title_worker: started", "workers", w.cfg.TitleWorkerCount)
 }
 
 // processJob fetches the record, verifies it is still eligible, then runs the
@@ -92,7 +91,7 @@ func (w *TitleWorker) processJob(ctx context.Context, recordID string) {
 	// Fetch fresh copy of the record to avoid acting on stale hook data.
 	record, err := w.app.FindRecordById("jobs", recordID)
 	if err != nil {
-		log.Printf("title_worker: fetch record %s: %v", recordID, err)
+		w.app.Logger().Error("title_worker: fetch record failed", "jobId", recordID, "error", err)
 		return
 	}
 
@@ -105,7 +104,7 @@ func (w *TitleWorker) processJob(ctx context.Context, recordID string) {
 	// Claim the job by transitioning to processing_title.
 	record.Set("status", models.JobStatusProcessingTitle)
 	if err := w.app.Save(record); err != nil {
-		log.Printf("title_worker: claim job %s: %v", recordID, err)
+		w.app.Logger().Error("title_worker: claim job failed", "jobId", recordID, "error", err)
 		return
 	}
 
@@ -121,25 +120,32 @@ func (w *TitleWorker) processJob(ctx context.Context, recordID string) {
 		return
 	}
 
+	w.app.Logger().Debug("title_worker: fetched torrent info", "jobId", recordID, "torrentName", torrent.Name, "torrentHash", torrentHash)
+
 	result, err := services.DetermineAnimeTitle(ctx, torrent.Name, w.llmClient, w.tmdbClient, w.animeListClient)
 	if err != nil {
 		w.failJob(record, err.Error())
 		return
 	}
 
+	w.app.Logger().Debug("title_worker: title determined", "jobId", recordID, "animeTitle", result.AnimeTitle, "tmdbId", result.TMDbID, "animeListId", result.AnimeListID)
+
 	record.Set("anime_title", result.AnimeTitle)
 	record.Set("status", models.JobStatusProcessingRsync)
 	if err := w.app.Save(record); err != nil {
-		log.Printf("title_worker: save result for job %s: %v", recordID, err)
+		w.app.Logger().Error("title_worker: save result failed", "jobId", recordID, "error", err)
+		return
 	}
+
+	w.app.Logger().Info("title_worker: job completed", "jobId", recordID, "animeTitle", result.AnimeTitle)
 }
 
 // failJob transitions a job record to the error state with a message.
 func (w *TitleWorker) failJob(record *core.Record, msg string) {
-	log.Printf("title_worker: job %s failed: %s", record.Id, msg)
+	w.app.Logger().Error("title_worker: job failed", "jobId", record.Id, "error", msg)
 	record.Set("status", models.JobStatusError)
 	record.Set("error", msg)
 	if err := w.app.Save(record); err != nil {
-		log.Printf("title_worker: save error state for job %s: %v", record.Id, err)
+		w.app.Logger().Error("title_worker: save error state failed", "jobId", record.Id, "error", err)
 	}
 }

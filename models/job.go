@@ -1,8 +1,9 @@
 package models
 
 const (
-	JobStatusPending    = "pending"
-	JobStatusProcessing = "processing"
-	JobStatusDone       = "done"
-	JobStatusError      = "error"
+	JobStatusPending         = "pending"
+	JobStatusProcessingTitle = "processing_title"
+	JobStatusProcessingRsync = "processing_rsync"
+	JobStatusDone            = "done"
+	JobStatusError           = "error"
 )

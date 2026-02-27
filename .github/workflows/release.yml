@@ -24,10 +24,11 @@ jobs:
       - name: Build binary
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o qb-auto .
+          echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: release-${{ github.sha }}
-          name: Release ${{ github.sha }}
+          tag_name: release-${{ env.SHORT_SHA }}
+          name: Release ${{ env.SHORT_SHA }}
           files: qb-auto

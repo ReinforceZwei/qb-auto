@@ -166,6 +166,8 @@ qb-auto/
 │   │   └── animelist.go       # anime-list API: search & mark downloaded
 │   ├── tmdb/
 │   │   └── tmdb.go            # TMDb API via golang-tmdb
+│   ├── rsync/
+│   │   └── rsync.go           # rsync binary wrapper (daemon protocol)
 │   └── webhook/
 │       └── webhook.go         # Send webhook notification
 │
@@ -181,7 +183,7 @@ Key decisions explained:
 - `routes/` — Pocketbase lets you register custom routes via app.OnBeforeServe(). Keep each route's handler here, separate from business logic.
 - `workers/` — The two workers have different concurrency characteristics (title workers = multiple, rsync worker = single queue). Each gets its own file with its goroutine/channel logic.
 - `services/` — Sits between routes/workers and external clients. anime_title.go encapsulates the full multi-step title determination flow (LLM extract → TMDb search → LLM confirm → anime list lookup) so workers just call one function.
-- `clients/` — One sub-package per external system. Each is a thin HTTP client (using resty) focused only on making API calls, no business logic. This makes them easy to mock/test. tmdb/ wraps golang-tmdb to hide its API surface.
+- `clients/` — One sub-package per external system. Each is a thin wrapper focused only on talking to that system, no business logic. This makes them easy to mock/test. tmdb/ wraps golang-tmdb to hide its API surface. rsync/ wraps the rsync binary via os/exec using the rsync daemon protocol.
 - `llm/` — Isolates all eino-specific code. prompts.go keeps prompt strings in one place so they're easy to iterate on.
 - `models/` — Shared structs like Job (with status constants like pending, processing, done, error) that are referenced across layers without circular imports.
 
@@ -198,6 +200,7 @@ qBittorrent → routes/torrent.go
                     → llm/             (confirm match)
                     → clients/animelist/ (search record)
             → workers/rsync_worker.go
+                → clients/rsync/       (copy files to NAS)
                 → clients/qui/         (add "done" tag)
                 → clients/animelist/   (mark downloaded)
                 → clients/webhook/     (notify)

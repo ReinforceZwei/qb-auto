@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/ReinforceZwei/qb-auto/clients/animelist"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
@@ -23,13 +24,31 @@ import (
 )
 
 func main() {
-	// Load .env file if present (non-fatal when missing — production uses real env vars)
+	// Load .env file if present (non-fatal when missing — env vars override JSON config values)
 	_ = godotenv.Load()
 
-	cfg, err := config.Load()
+	cfgPath, err := config.ConfigPath()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		if initErr := config.InitConfig(cfgPath); initErr != nil {
+			log.Fatal(initErr)
+		}
+		log.Printf("Config file created at %s — please edit it and restart.", cfgPath)
+		os.Exit(0)
+	}
+
+	cfg, err := config.LoadFromFile(cfgPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Inject --http / --https from config into os.Args for the serve subcommand,
+	// but only when the flag hasn't already been provided on the CLI.
+	injectServeFlag("--http", cfg.HttpAddr)
+	injectServeFlag("--https", cfg.HttpsAddr)
 
 	app := pocketbase.New()
 
@@ -79,5 +98,26 @@ func main() {
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// injectServeFlag appends flag and value to os.Args when the serve subcommand is
+// present, the value is non-empty, and the flag has not already been provided.
+func injectServeFlag(flag, value string) {
+	if value == "" {
+		return
+	}
+	hasServe := false
+	flagSet := false
+	for _, arg := range os.Args[1:] {
+		if arg == "serve" {
+			hasServe = true
+		}
+		if arg == flag || len(arg) > len(flag)+1 && arg[:len(flag)+1] == flag+"=" {
+			flagSet = true
+		}
+	}
+	if hasServe && !flagSet {
+		os.Args = append(os.Args, flag, value)
 	}
 }

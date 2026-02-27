@@ -31,11 +31,12 @@ type Config struct {
 
 	// rsync daemon
 	RsyncHost         string // RSYNC_HOST          (required) e.g. "192.168.1.100"
-	RsyncModule       string // RSYNC_MODULE        (required) rsync module = NAS shared folder, e.g. "anime"
+	RsyncModule       string // RSYNC_MODULE        (required) rsync module = NAS share root, e.g. "media"
 	RsyncUser         string // RSYNC_USER          (required)
 	RsyncPasswordFile string // RSYNC_PASSWORD_FILE (required) path to plaintext password file
 	RsyncPort         int    // RSYNC_PORT          (optional, default 873)
 	RsyncBinaryPath   string // RSYNC_BINARY        (optional, default "rsync")
+	NASAnimeBasePath  string // NAS_ANIME_BASE_PATH (required) folder inside the rsync module where anime lives, e.g. "anime"
 
 	// Workers
 	TitleWorkerCount int // TITLE_WORKER_COUNT (defaults to 1)
@@ -52,6 +53,7 @@ var required = []string{
 	"RSYNC_MODULE",
 	"RSYNC_USER",
 	"RSYNC_PASSWORD_FILE",
+	"NAS_ANIME_BASE_PATH",
 }
 
 // Load reads configuration from environment variables and returns a Config.
@@ -116,6 +118,7 @@ func Load() (*Config, error) {
 		RsyncPasswordFile: os.Getenv("RSYNC_PASSWORD_FILE"),
 		RsyncPort:         rsyncPort,
 		RsyncBinaryPath:   rsyncBinaryPath,
+		NASAnimeBasePath:  os.Getenv("NAS_ANIME_BASE_PATH"),
 		TitleWorkerCount:  titleWorkerCount,
 	}, nil
 }

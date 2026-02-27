@@ -6,6 +6,7 @@ import (
 
 	"github.com/ReinforceZwei/qb-auto/clients/animelist"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
+	rsyncclient "github.com/ReinforceZwei/qb-auto/clients/rsync"
 	tmdbclient "github.com/ReinforceZwei/qb-auto/clients/tmdb"
 	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/llm"
@@ -61,6 +62,11 @@ func main() {
 		tw := workers.NewTitleWorker(app, cfg, quiClient, llmClient, tmdbClient, animeListClient)
 		tw.Register()
 		tw.Start(ctx)
+
+		rsyncClient := rsyncclient.NewClient(cfg)
+		rw := workers.NewRsyncWorker(app, cfg, quiClient, rsyncClient, animeListClient)
+		rw.Register()
+		rw.Start(ctx)
 
 		return se.Next()
 	})

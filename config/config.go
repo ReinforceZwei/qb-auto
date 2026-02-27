@@ -29,8 +29,13 @@ type Config struct {
 	// Webhook
 	WebhookURL string // WEBHOOK_URL
 
-	// rsync / NAS
-	NASDestPath string // NAS_DEST_PATH (e.g. user@nas:/volume1/anime)
+	// rsync daemon
+	RsyncHost         string // RSYNC_HOST          (required) e.g. "192.168.1.100"
+	RsyncModule       string // RSYNC_MODULE        (required) rsync module = NAS shared folder, e.g. "anime"
+	RsyncUser         string // RSYNC_USER          (required)
+	RsyncPasswordFile string // RSYNC_PASSWORD_FILE (required) path to plaintext password file
+	RsyncPort         int    // RSYNC_PORT          (optional, default 873)
+	RsyncBinaryPath   string // RSYNC_BINARY        (optional, default "rsync")
 
 	// Workers
 	TitleWorkerCount int // TITLE_WORKER_COUNT (defaults to 1)
@@ -43,7 +48,10 @@ var required = []string{
 	"TMDB_API_KEY",
 	"QUI_BASE_URL",
 	"ANIMELIST_BASE_URL",
-	"NAS_DEST_PATH",
+	"RSYNC_HOST",
+	"RSYNC_MODULE",
+	"RSYNC_USER",
+	"RSYNC_PASSWORD_FILE",
 }
 
 // Load reads configuration from environment variables and returns a Config.
@@ -76,6 +84,20 @@ func Load() (*Config, error) {
 		titleWorkerCount = parsed
 	}
 
+	rsyncPort := 873
+	if raw := os.Getenv("RSYNC_PORT"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid RSYNC_PORT: %w", err)
+		}
+		rsyncPort = parsed
+	}
+
+	rsyncBinaryPath := "rsync"
+	if raw := os.Getenv("RSYNC_BINARY"); raw != "" {
+		rsyncBinaryPath = raw
+	}
+
 	return &Config{
 		LLMBaseURL:       os.Getenv("LLM_BASE_URL"),
 		LLMAPIKey:        os.Getenv("LLM_API_KEY"),
@@ -87,8 +109,13 @@ func Load() (*Config, error) {
 		AnimeListBaseURL:  os.Getenv("ANIMELIST_BASE_URL"),
 		AnimeListUsername: os.Getenv("ANIMELIST_USERNAME"),
 		AnimeListPassword: os.Getenv("ANIMELIST_PASSWORD"),
-		WebhookURL:       os.Getenv("WEBHOOK_URL"),
-		NASDestPath:      os.Getenv("NAS_DEST_PATH"),
-		TitleWorkerCount: titleWorkerCount,
+		WebhookURL:        os.Getenv("WEBHOOK_URL"),
+		RsyncHost:         os.Getenv("RSYNC_HOST"),
+		RsyncModule:       os.Getenv("RSYNC_MODULE"),
+		RsyncUser:         os.Getenv("RSYNC_USER"),
+		RsyncPasswordFile: os.Getenv("RSYNC_PASSWORD_FILE"),
+		RsyncPort:         rsyncPort,
+		RsyncBinaryPath:   rsyncBinaryPath,
+		TitleWorkerCount:  titleWorkerCount,
 	}, nil
 }

@@ -8,6 +8,7 @@ import (
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
 	rsyncclient "github.com/ReinforceZwei/qb-auto/clients/rsync"
 	tmdbclient "github.com/ReinforceZwei/qb-auto/clients/tmdb"
+	webhookclient "github.com/ReinforceZwei/qb-auto/clients/webhook"
 	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/llm"
 	"github.com/ReinforceZwei/qb-auto/routes"
@@ -67,6 +68,11 @@ func main() {
 		rw := workers.NewRsyncWorker(app, cfg, quiClient, rsyncClient, animeListClient)
 		rw.Register()
 		rw.Start(ctx)
+
+		webhookClient := webhookclient.New(cfg)
+		nw := workers.NewNotifyWorker(app, cfg, quiClient, webhookClient)
+		nw.Register()
+		nw.Start(ctx)
 
 		return se.Next()
 	})

@@ -53,7 +53,8 @@ func (w *TitleWorker) Register() {
 	dispatch := func(e *core.RecordEvent) error {
 		record := e.Record
 		if record.GetString("status") == models.JobStatusPending &&
-			record.GetString("anime_title") == "" {
+			record.GetString("anime_title") == "" &&
+			record.GetString("category") == "anime" {
 			select {
 			case w.jobCh <- record.Id:
 			default:

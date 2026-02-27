@@ -95,13 +95,26 @@ For anime final title that will be used in NAS folder, it should reference anime
 
 1. qBittorrent download completed
 2. qBittorrent trigger external program (e.g. shell script)
-3. shell script call qb-auto API with torrent info
-4. qb-auto call qui API to get torrent details
-5. qb-auto determine destination folder name (follow existing naming pattern)
-6. qb-auto execute `rsync` and copy torrent files to NAS
-7. qb-auto call qui API to mark torrent as copied (apply tag `done`)
-8. qb-auto call anime list API to mark anime as downloaded
-9. qb-auto send webhook to notify torrent job completed
+3. shell script call qb-auto API with torrent hash and category
+4. qb-auto create job record in DB with the torrent category
+5. qb-auto route based on category:
+
+### Anime category (`anime`)
+
+6. qb-auto call qui API to get torrent details
+7. qb-auto determine destination folder name (follow existing naming pattern)
+8. qb-auto execute `rsync` and copy torrent files to NAS
+9. qb-auto call qui API to mark torrent as copied (apply tag `done`)
+10. qb-auto call anime list API to mark anime as downloaded
+11. qb-auto send webhook to notify torrent job completed (via notify_worker, see below)
+
+### Other / uncategorized
+
+6. qb-auto send webhook to notify torrent job completed (via notify_worker, see below)
+
+### notify_worker (planned)
+
+A dedicated `notify_worker` will handle all webhook notifications. Both the anime path (after rsync) and the non-anime path transition the job to `pending_notify` status, which the `notify_worker` picks up to send the webhook and mark the job as `done`. This centralises all webhook sending in one place.
 
 ### Determine anime title
 
@@ -149,11 +162,12 @@ qb-auto/
 │   └── 1771918154_created_jobs.go
 │
 ├── routes/                    # API route handlers (Pocketbase hooks/custom routes)
-│   └── torrent.go             # GET /api/torrent-complete?hash=
+│   └── torrent.go             # GET /api/torrent-complete?hash=&category=
 │
 ├── workers/                   # Background worker logic
-│   ├── title_worker.go        # Determine anime title & folder name (parallelizable)
-│   └── rsync_worker.go        # Copy files to NAS via rsync (single worker)
+│   ├── title_worker.go        # Determine anime title & folder name (parallelizable, anime only)
+│   ├── rsync_worker.go        # Copy files to NAS via rsync (single worker)
+│   └── notify_worker.go       # Send webhook notifications (planned)
 │
 ├── services/                  # Orchestration / business logic
 │   ├── job_service.go         # Create/update job records in DB
@@ -181,7 +195,7 @@ qb-auto/
 
 Key decisions explained:
 - `routes/` — Pocketbase lets you register custom routes via app.OnBeforeServe(). Keep each route's handler here, separate from business logic.
-- `workers/` — The two workers have different concurrency characteristics (title workers = multiple, rsync worker = single queue). Each gets its own file with its goroutine/channel logic.
+- `workers/` — Workers have different concurrency characteristics (title workers = multiple, rsync worker = single queue, notify worker = single queue). Each gets its own file with its goroutine/channel logic. `title_worker` handles anime jobs only; `notify_worker` (planned) centralises all webhook sending for both anime and non-anime completions.
 - `services/` — Sits between routes/workers and external clients. anime_title.go encapsulates the full multi-step title determination flow (LLM extract → TMDb search → LLM confirm → anime list lookup) so workers just call one function.
 - `clients/` — One sub-package per external system. Each is a thin wrapper focused only on talking to that system, no business logic. This makes them easy to mock/test. tmdb/ wraps golang-tmdb to hide its API surface. rsync/ wraps the rsync binary via os/exec using the rsync daemon protocol.
 - `llm/` — Isolates all eino-specific code. prompts.go keeps prompt strings in one place so they're easy to iterate on.
@@ -190,49 +204,56 @@ Key decisions explained:
 ### Flow
 
 ```
-qBittorrent → routes/torrent.go
-            → services/job_service.go  (create job in DB)
-            → workers/title_worker.go
-                → clients/qui/         (get torrent details)
-                → services/anime_title.go
-                    → llm/             (extract title)
-                    → clients/tmdb/    (search TMDb)
-                    → llm/             (confirm match)
-                    → clients/animelist/ (search record)
-            → workers/rsync_worker.go
-                → clients/rsync/       (copy files to NAS)
-                → clients/qui/         (add "done" tag)
-                → clients/animelist/   (mark downloaded)
+qBittorrent → routes/torrent.go  (hash + category)
+            → services/job_service.go  (create job; set status based on category)
+            │
+            ├─ [anime] → workers/title_worker.go
+            │                → clients/qui/         (get torrent details)
+            │                → services/anime_title.go
+            │                    → llm/             (extract title)
+            │                    → clients/tmdb/    (search TMDb)
+            │                    → llm/             (confirm match)
+            │                    → clients/animelist/ (search record)
+            │            → workers/rsync_worker.go
+            │                → clients/rsync/       (copy files to NAS)
+            │                → clients/qui/         (add "done" tag)
+            │                → clients/animelist/   (mark downloaded)
+            │                → [status: pending_notify]
+            │
+            └─ [other/uncategorized] → [status: pending_notify]
+                        ↓
+            workers/notify_worker.go  (planned)
                 → clients/webhook/     (notify)
+                → [status: done]
 ```
 
-1. qBittorrent invoke shell script and call qb-auto API with torrent hash
+1. qBittorrent invoke shell script and call qb-auto API with torrent hash and category
 
-GET /api/torrent-complete?hash=
+GET /api/torrent-complete?hash=&category=
 
 2. Create job record in database
 
-job status, torrent hash
+Category determines initial job status:
+- `anime` → `pending` (picked up by title_worker)
+- other / empty → `pending_notify` (picked up by notify_worker, planned)
 
-3. Start worker (title worker and rsync worker)
+3. Anime path: title_worker and rsync_worker
 
-Title worker determine anime title and final folder name (allow multiple workers)
+Title worker determines anime title and final folder name (allows multiple workers).
 
-Worker get torrent details from qui API (content path, name)
+Worker gets torrent details from qui API (content path, name).
 
-*invoke function* to get final anime title
+Calls DetermineAnimeTitle function (LLM + TMDb + anime list).
 
-update job status and title result to database
+Updates job status and title result in database, then invokes rsync_worker.
 
-invoke rsync worker 
+rsync_worker copies file from local to remote NAS (single worker).
 
-rsync worker copy file from local to remote NAS (single worker)
+Marks torrent as done with tag. Marks downloaded in anime list.
 
-mark torrent as done with tag
+Transitions job to `pending_notify`.
 
-mark downloaded in anime list
+4. All paths: notify_worker (planned)
 
-update job status to done
-
-send webhook notification
+Picks up jobs with status `pending_notify`, sends webhook notification, marks job as `done`.
 

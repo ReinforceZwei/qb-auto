@@ -18,7 +18,8 @@ func RegisterTorrentRoutes(se *core.ServeEvent, cfg *config.Config) {
 			})
 		}
 
-		job, err := services.CreateJob(e.App, hash)
+		category := e.Request.URL.Query().Get("category")
+		job, err := services.CreateJob(e.App, hash, category)
 		if err != nil {
 			return e.JSON(http.StatusInternalServerError, map[string]string{
 				"error": err.Error(),

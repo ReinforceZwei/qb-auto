@@ -1,4 +1,4 @@
-# 1. [planned] orphan torrent
+# 1. [planned, low priority] orphan torrent
 
 What if a torrent didnt trigger torrent-complete event (for whatever reason)?
 
@@ -41,3 +41,23 @@ i want a command (e.g. `qb-auto install`) to help me setup systemd service and a
 the service is installed as systemd template unit, run under my user account.
 
 i can control it as `sudo systemctl start qb-auto@myuser`
+
+# 5. [planned] save tmdb id into anime list
+
+we have tmdb id determined for an anime list record. 
+
+save the tmdb id into anime list `url` property
+
+this is not related to qb-auto itself, but anime list is planned to be re-written and integrate with tmdb (i.e. record will have tmdb id linked). saving tmdb id here can reduce future migration work
+
+## Implementation note
+
+there is existing `MarkDownloaded` function. avoid two seperate update request call in worker. combine multiple properties update into single request. anime list update API support multiple properties
+
+# 6. [TBC] replace qui API with qbittorrent API
+
+qui API wraps around qbittorrent API with additional advanced feature. however qb-auto doesnt require advanced qui feature. consider direct API call to qbittorrent
+
+pros: no extra dependency on thrid party API (qui) - qb-auto deal with qbittorrent, not qui
+
+cons: qbittorrent uses username + password and cookie based session id, while qui API provide clean API key based authentication

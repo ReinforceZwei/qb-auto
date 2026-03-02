@@ -99,6 +99,8 @@ func main() {
 			return err
 		}
 
+		routes.RegisterAnimeTitleRoutes(se, llmClient, tmdbClient, animeListClient)
+
 		tw := workers.NewTitleWorker(app, cfg, quiClient, llmClient, tmdbClient, animeListClient)
 		tw.Register()
 		tw.Start(ctx)

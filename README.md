@@ -167,7 +167,7 @@ qb-auto/
 ├── workers/                   # Background worker logic
 │   ├── title_worker.go        # Determine anime title & folder name (parallelizable, anime only)
 │   ├── rsync_worker.go        # Copy files to NAS via rsync (single worker)
-│   └── notify_worker.go       # Send webhook notifications (planned)
+│   └── notify_worker.go       # Send webhook notifications
 │
 ├── services/                  # Orchestration / business logic
 │   ├── job_service.go         # Create/update job records in DB
@@ -222,7 +222,7 @@ qBittorrent → routes/torrent.go  (hash + category)
             │
             └─ [other/uncategorized] → [status: pending_notify]
                         ↓
-            workers/notify_worker.go  (planned)
+            workers/notify_worker.go
                 → clients/webhook/     (notify)
                 → [status: done]
 ```

@@ -44,8 +44,7 @@ type Config struct {
 	TitleWorkerCount int `json:"title_worker_count"` // TITLE_WORKER_COUNT (defaults to 1)
 
 	// PocketBase server
-	HttpAddr  string `json:"http_addr"`  // HTTP_ADDR  (optional, default "127.0.0.1:8090")
-	HttpsAddr string `json:"https_addr"` // HTTPS_ADDR (optional)
+	HttpAddr string `json:"http_addr"` // HTTP_ADDR (optional, default "127.0.0.1:8090")
 }
 
 var required = []string{
@@ -144,7 +143,6 @@ func LoadFromFile(path string) (*Config, error) {
 	applyEnvString(&cfg.RsyncBinaryPath, "RSYNC_BINARY")
 	applyEnvString(&cfg.NASAnimeBasePath, "NAS_ANIME_BASE_PATH")
 	applyEnvString(&cfg.HttpAddr, "HTTP_ADDR")
-	applyEnvString(&cfg.HttpsAddr, "HTTPS_ADDR")
 
 	// Apply environment variable overrides for int fields.
 	if raw := os.Getenv("QUI_INSTANCE_ID"); raw != "" {

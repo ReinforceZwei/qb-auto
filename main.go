@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/ReinforceZwei/qb-auto/clients/animelist"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
@@ -45,17 +46,26 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Inject --http / --https from config into os.Args for the serve subcommand,
-	// but only when the flag hasn't already been provided on the CLI.
-	injectServeFlag("--http", cfg.HttpAddr)
-	injectServeFlag("--https", cfg.HttpsAddr)
+	// Store pb_data next to the config file so data follows the same XDG location.
+	pbDataDir := filepath.Join(filepath.Dir(cfgPath), "pb_data")
 
-	app := pocketbase.New()
+	app := pocketbase.NewWithConfig(pocketbase.Config{
+		DefaultDataDir: pbDataDir,
+	})
 
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
 		// Only auto migrate when running from go run
 		Automigrate: osutils.IsProbablyGoRun(),
 	})
+
+	// Apply HTTP listen address from config before the listener is created.
+	// Priority 999 ensures this runs before the PocketBase internal finalizer.
+	if cfg.HttpAddr != "" {
+		app.OnServe().BindFunc(func(se *core.ServeEvent) error {
+			se.Server.Addr = cfg.HttpAddr
+			return se.Next()
+		})
+	}
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		routes.RegisterTorrentRoutes(se, cfg)
@@ -101,23 +111,3 @@ func main() {
 	}
 }
 
-// injectServeFlag appends flag and value to os.Args when the serve subcommand is
-// present, the value is non-empty, and the flag has not already been provided.
-func injectServeFlag(flag, value string) {
-	if value == "" {
-		return
-	}
-	hasServe := false
-	flagSet := false
-	for _, arg := range os.Args[1:] {
-		if arg == "serve" {
-			hasServe = true
-		}
-		if arg == flag || len(arg) > len(flag)+1 && arg[:len(flag)+1] == flag+"=" {
-			flagSet = true
-		}
-	}
-	if hasServe && !flagSet {
-		os.Args = append(os.Args, flag, value)
-	}
-}

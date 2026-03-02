@@ -14,7 +14,7 @@ call qui API and look for category is anime, tags not contain done, torrent stat
 
 then create job for them
 
-# 2. [planned] hacky way to config pocketbase listen address
+# 2. [done] hacky way to config pocketbase listen address
 
 we currently injecting listen address into args, but there should a better way to do that.
 
@@ -24,7 +24,7 @@ see its result in [how to config pocketbase](./HOW_TO_CONFIG_POCKETBASE.md)
 
 follow the study result and update qb-auto to config pb in a correct way
 
-# 3. [planned] pb_data need to follow default config location
+# 3. [done] pb_data need to follow default config location
 
 currently pb_data folder will stick with binary, but config json is stored in user config directory.
 

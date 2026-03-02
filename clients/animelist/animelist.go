@@ -181,12 +181,18 @@ func (c *Client) Search(query string) ([]AnimeRecord, error) {
 	return matches, nil
 }
 
-// MarkDownloaded sets the downloaded flag on the record with the given ID and
-// invalidates the local cache so the next Search reflects the change.
-func (c *Client) MarkDownloaded(id int) error {
+// MarkDownloaded sets the downloaded flag on the record with the given ID.
+// If tmdbID is non-zero, the TMDb TV show page URL is also written to the url
+// field in the same request, avoiding a separate round trip.
+func (c *Client) MarkDownloaded(id int, tmdbID int) error {
+	fields := map[string]string{"downloaded": "true"}
+	if tmdbID != 0 {
+		fields["url"] = fmt.Sprintf("https://www.themoviedb.org/tv/%d", tmdbID)
+	}
+
 	resp, err := c.withAuth(func() (*resty.Response, error) {
 		return c.http.R().
-			SetFormData(map[string]string{"downloaded": "true"}).
+			SetFormData(fields).
 			Post("/update/" + strconv.Itoa(id))
 	})
 	if err != nil {

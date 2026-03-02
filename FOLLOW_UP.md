@@ -42,7 +42,7 @@ the service is installed as systemd template unit, run under my user account.
 
 i can control it as `sudo systemctl start qb-auto@myuser`
 
-# 5. [planned] save tmdb id into anime list
+# 5. [done] save tmdb id into anime list
 
 we have tmdb id determined for an anime list record. 
 

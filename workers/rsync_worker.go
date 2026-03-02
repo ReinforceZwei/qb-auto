@@ -106,6 +106,7 @@ func (w *RsyncWorker) processJob(ctx context.Context, recordID string) {
 	torrentHash := record.GetString("torrent_hash")
 	animeTitle := record.GetString("anime_title")
 	animeListIDStr := record.GetString("anime_list_id")
+	tmdbID := record.GetInt("tmdb_id")
 
 	// Resolve the local content path from qui.
 	torrent, err := w.quiClient.GetTorrent(torrentHash)
@@ -149,7 +150,7 @@ func (w *RsyncWorker) processJob(ctx context.Context, recordID string) {
 		w.failJob(record, "invalid anime_list_id "+strconv.Quote(animeListIDStr)+": "+err.Error())
 		return
 	}
-	if err := w.animeListClient.MarkDownloaded(animeListID); err != nil {
+	if err := w.animeListClient.MarkDownloaded(animeListID, tmdbID); err != nil {
 		w.failJob(record, "mark downloaded in anime list: "+err.Error())
 		return
 	}

@@ -106,6 +106,8 @@ func main() {
 		return se.Next()
 	})
 
+	app.RootCmd.AddCommand(newInstallCmd())
+
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}

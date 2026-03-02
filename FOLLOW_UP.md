@@ -32,7 +32,7 @@ need to update default pb_data location to the same as config json
 
 see [how to config pocketbase](./HOW_TO_CONFIG_POCKETBASE.md) for how to set default pb_data location
 
-# 4. [planned] one-click setup systemd service
+# 4. [done] one-click setup systemd service
 
 qb-auto is intended to run directly on linux host machine (no docker, no vm)
 

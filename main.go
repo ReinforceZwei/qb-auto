@@ -25,6 +25,16 @@ import (
 )
 
 func main() {
+	// install subcommand needs no config — short-circuit before config loading.
+	if len(os.Args) > 1 && os.Args[1] == "install" {
+		app := pocketbase.New()
+		app.RootCmd.AddCommand(newInstallCmd())
+		if err := app.Start(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	// Load .env file if present (non-fatal when missing — env vars override JSON config values)
 	_ = godotenv.Load()
 

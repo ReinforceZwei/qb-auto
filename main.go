@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -24,34 +25,18 @@ import (
 	_ "github.com/ReinforceZwei/qb-auto/migrations"
 )
 
-func main() {
-	// install subcommand needs no config — short-circuit before config loading.
-	if len(os.Args) > 1 && os.Args[1] == "install" {
-		app := pocketbase.New()
-		app.RootCmd.AddCommand(newInstallCmd())
-		if err := app.Start(); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
 
+func main() {
 	// Load .env file if present (non-fatal when missing — env vars override JSON config values)
 	_ = godotenv.Load()
 
+	// Get config path to build data dir, actual config load happens on serve command
 	cfgPath, err := config.ConfigPath()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		if initErr := config.InitConfig(cfgPath); initErr != nil {
-			log.Fatal(initErr)
-		}
-		log.Printf("Config file created at %s — please edit it and restart.", cfgPath)
-		os.Exit(0)
-	}
-
-	cfg, err := config.LoadFromFile(cfgPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -68,16 +53,27 @@ func main() {
 		Automigrate: osutils.IsProbablyGoRun(),
 	})
 
-	// Apply HTTP listen address from config before the listener is created.
-	// Priority 999 ensures this runs before the PocketBase internal finalizer.
-	if cfg.HttpAddr != "" {
-		app.OnServe().BindFunc(func(se *core.ServeEvent) error {
-			se.Server.Addr = cfg.HttpAddr
-			return se.Next()
-		})
-	}
+	app.RootCmd.Version = fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
+	app.RootCmd.SetVersionTemplate("{{.Name}} version {{.Version}}\n")
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
+		// Create init config if not exist then exit
+		if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+			if initErr := config.InitConfig(cfgPath); initErr != nil {
+				log.Fatal(initErr)
+			}
+			log.Printf("Config file created at %s — please edit it and restart.", cfgPath)
+			os.Exit(0)
+		}
+
+		cfg, err := config.LoadFromFile(cfgPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if cfg.HttpAddr != "" {
+			se.Server.Addr = cfg.HttpAddr
+		}
+
 		routes.RegisterTorrentRoutes(se, cfg)
 
 		ctx := context.Background()
@@ -124,4 +120,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-

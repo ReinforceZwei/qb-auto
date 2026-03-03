@@ -92,11 +92,23 @@ func ResolveAnimeTitle(
 	}, nil
 }
 
+// animeListChunkSize is the maximum number of anime list records sent to the LLM
+// in a single call during the fallback search. Keeping it bounded avoids
+// excessively long prompts when the watch list is large.
+const animeListChunkSize = 150
+
 // DetermineAnimeTitle resolves a downloaded torrent folder name to a confirmed
 // Traditional Chinese anime title by running all 5 steps of the determination
 // flow (steps 1–4 via ResolveAnimeTitle, then step 5):
 //
-//  5. Confirming the title exists in the anime list.
+//  5. Confirming the title exists in the anime list via LLM.
+//
+// Step 5 runs in two stages:
+//   - Stage A: search the anime list by title; if results exist, ask the LLM to
+//     pick the best match from those results.
+//   - Stage B (fallback): if the search returned nothing or the LLM found no
+//     match, fetch all unwatched+undownloaded records (sorted by addedTime desc)
+//     and ask the LLM in chunks of animeListChunkSize until a match is found.
 //
 // Returns an error (stopping further processing) if no TMDb match is found,
 // if the LLM cannot select a match, or if the anime list does not contain the
@@ -113,18 +125,62 @@ func DetermineAnimeTitle(
 		return nil, fmt.Errorf("determine anime title: %w", err)
 	}
 
-	// Step 5 — Anime list: confirm the title exists.
-	records, err := animeListClient.Search(resolved.AnimeTitle)
+	// Stage A — search the anime list by the resolved title and ask the LLM to confirm.
+	searchResults, err := animeListClient.Search(resolved.AnimeTitle)
 	if err != nil {
 		return nil, fmt.Errorf("determine anime title: anime list search: %w", err)
 	}
-	if len(records) == 0 {
-		return nil, fmt.Errorf("determine anime title: %q not found in anime list — needs human review", resolved.AnimeTitle)
+
+	if len(searchResults) > 0 {
+		candidates := toAnimeListCandidates(searchResults)
+		idx, err := llmClient.PickBestAnimeListMatch(ctx, resolved.AnimeTitle, candidates)
+		if err != nil {
+			return nil, fmt.Errorf("determine anime title: llm pick from search results: %w", err)
+		}
+		if idx >= 0 && idx < len(searchResults) {
+			matched := searchResults[idx]
+			return &TitleResult{
+				AnimeTitle:  resolved.AnimeTitle,
+				AnimeListID: matched.ID,
+				TMDbID:      resolved.TMDbID,
+			}, nil
+		}
 	}
 
-	return &TitleResult{
-		AnimeTitle:  resolved.AnimeTitle,
-		AnimeListID: records[0].ID,
-		TMDbID:      resolved.TMDbID,
-	}, nil
+	// Stage B — fallback: iterate the full unwatched+undownloaded list in chunks.
+	fullList, err := animeListClient.GetUnwatchedUndownloaded()
+	if err != nil {
+		return nil, fmt.Errorf("determine anime title: get unwatched undownloaded: %w", err)
+	}
+
+	for start := 0; start < len(fullList); start += animeListChunkSize {
+		end := min(start+animeListChunkSize, len(fullList))
+		chunk := fullList[start:end]
+
+		candidates := toAnimeListCandidates(chunk)
+		idx, err := llmClient.PickBestAnimeListMatch(ctx, resolved.AnimeTitle, candidates)
+		if err != nil {
+			return nil, fmt.Errorf("determine anime title: llm pick from fallback chunk [%d:%d]: %w", start, end, err)
+		}
+		if idx >= 0 && idx < len(chunk) {
+			matched := chunk[idx]
+			return &TitleResult{
+				AnimeTitle:  resolved.AnimeTitle,
+				AnimeListID: matched.ID,
+				TMDbID:      resolved.TMDbID,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("determine anime title: %q not found in anime list — needs human review", resolved.AnimeTitle)
+}
+
+// toAnimeListCandidates converts a slice of AnimeRecord to the slim candidate
+// type that is passed to the LLM (ID and Name only).
+func toAnimeListCandidates(records []animelist.AnimeRecord) []llm.AnimeListCandidate {
+	out := make([]llm.AnimeListCandidate, len(records))
+	for i, r := range records {
+		out[i] = llm.AnimeListCandidate{ID: r.ID, Name: r.Name}
+	}
+	return out
 }

@@ -20,6 +20,13 @@ type TMDbCandidate struct {
 	Overview     string
 }
 
+// AnimeListCandidate holds the anime list record information passed to the LLM for match selection.
+// Only ID and Name are included as specified — the list can be large and extra fields add noise.
+type AnimeListCandidate struct {
+	ID   int
+	Name string
+}
+
 // Client wraps an eino BaseChatModel and provides higher-level anime title helpers.
 type Client struct {
 	model model.BaseChatModel
@@ -86,6 +93,42 @@ func (c *Client) PickBestTMDbMatch(ctx context.Context, folderName, extractedTit
 		return -1, fmt.Errorf("llm: pick best tmdb match: %w", err)
 	}
 	return result.Index, nil
+}
+
+// PickBestAnimeListMatch asks the LLM to choose the anime list record that best
+// matches the resolved Traditional Chinese title. Returns the 0-based index of
+// the chosen candidate, or -1 if the LLM finds no suitable match.
+func (c *Client) PickBestAnimeListMatch(ctx context.Context, animeTitle string, candidates []AnimeListCandidate) (int, error) {
+	userMsg := buildAnimeListMatchUserMessage(animeTitle, candidates)
+
+	messages := []*schema.Message{
+		{Role: schema.System, Content: promptPickBestAnimeListMatch},
+		{Role: schema.User, Content: userMsg},
+	}
+
+	resp, err := c.model.Generate(ctx, messages)
+	if err != nil {
+		return -1, fmt.Errorf("llm: pick best anime list match: %w", err)
+	}
+
+	var result struct {
+		Index int `json:"index"`
+	}
+	if err := parseJSONResponse(resp.Content, &result); err != nil {
+		return -1, fmt.Errorf("llm: pick best anime list match: %w", err)
+	}
+	return result.Index, nil
+}
+
+// buildAnimeListMatchUserMessage formats the user message listing all anime list candidates.
+func buildAnimeListMatchUserMessage(animeTitle string, candidates []AnimeListCandidate) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Resolved anime title: %s\n\n", animeTitle)
+	sb.WriteString("Anime list records:\n")
+	for i, c := range candidates {
+		fmt.Fprintf(&sb, "[%d] name=%s\n", i, c.Name)
+	}
+	return sb.String()
 }
 
 // buildPickMatchUserMessage formats the user message listing all TMDb candidates.

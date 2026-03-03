@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http/cookiejar"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -179,6 +180,28 @@ func (c *Client) Search(query string) ([]AnimeRecord, error) {
 		}
 	}
 	return matches, nil
+}
+
+// GetUnwatchedUndownloaded returns all records where watched == 0 AND downloaded == 0,
+// sorted by addedTime descending (most recently added first).
+func (c *Client) GetUnwatchedUndownloaded() ([]AnimeRecord, error) {
+	all, err := c.getAll()
+	if err != nil {
+		return nil, fmt.Errorf("animelist: get unwatched undownloaded: %w", err)
+	}
+
+	var result []AnimeRecord
+	for _, r := range all {
+		if r.Watched == 0 && r.Downloaded == 0 {
+			result = append(result, r)
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].AddedTime > result[j].AddedTime
+	})
+
+	return result, nil
 }
 
 // MarkDownloaded sets the downloaded flag on the record with the given ID.

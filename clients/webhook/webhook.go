@@ -41,6 +41,19 @@ func New(cfg *config.Config) *Client {
 	return &Client{webhookURL: cfg.WebhookURL, rc: rc}
 }
 
+func (c *Client) post(payload discordPayload) error {
+	resp, err := c.rc.R().
+		SetBody(payload).
+		Post(c.webhookURL)
+	if err != nil {
+		return fmt.Errorf("webhook: send: %w", err)
+	}
+	if resp.IsError() {
+		return fmt.Errorf("webhook: send: status %d", resp.StatusCode())
+	}
+	return nil
+}
+
 // Send posts a Discord embed notification for a completed torrent.
 // If the client has no webhook URL configured, Send returns nil immediately.
 func (c *Client) Send(torrentName, category string) error {
@@ -62,19 +75,43 @@ func (c *Client) Send(torrentName, category string) error {
 					{Name: "Name", Value: torrentName, Inline: false},
 					{Name: "Category", Value: category, Inline: true},
 				},
+			Footer: discordFooter{Text: "qBittorrent"},
+		},
+	},
+	}
+
+	return c.post(payload)
+}
+
+// SendError posts a Discord embed notification for a failed job.
+// If the client has no webhook URL configured, SendError returns nil immediately.
+func (c *Client) SendError(torrentName, category, errMsg string) error {
+	if c.webhookURL == "" {
+		return nil
+	}
+
+	if category == "" {
+		category = "None"
+	}
+	if torrentName == "" {
+		torrentName = "Unknown"
+	}
+
+	payload := discordPayload{
+		Username: "qbittorrent",
+		Embeds: []discordEmbed{
+			{
+				Title: "Failed: " + torrentName,
+				Color: 15158332,
+				Fields: []discordField{
+					{Name: "Name", Value: torrentName, Inline: false},
+					{Name: "Category", Value: category, Inline: true},
+					{Name: "Error", Value: errMsg, Inline: false},
+				},
 				Footer: discordFooter{Text: "qBittorrent"},
 			},
 		},
 	}
 
-	resp, err := c.rc.R().
-		SetBody(payload).
-		Post(c.webhookURL)
-	if err != nil {
-		return fmt.Errorf("webhook: send: %w", err)
-	}
-	if resp.IsError() {
-		return fmt.Errorf("webhook: send: status %d", resp.StatusCode())
-	}
-	return nil
+	return c.post(payload)
 }

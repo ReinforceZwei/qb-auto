@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
-	webhookclient "github.com/ReinforceZwei/qb-auto/clients/webhook"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
+	webhookclient "github.com/ReinforceZwei/qb-auto/clients/webhook"
 	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/models"
 	"github.com/pocketbase/pocketbase/core"
 )
 
-// NotifyWorker picks up pending_notify jobs, sends a Discord webhook embed, and
-// transitions jobs to done. A single goroutine is used; notifications are fast
-// and do not need parallelism.
+// NotifyWorker picks up pending_notify jobs and error jobs, sends Discord
+// webhook embeds, and transitions pending_notify jobs to done. A single
+// goroutine is used; notifications are fast and do not need parallelism.
 type NotifyWorker struct {
 	app           core.App
 	cfg           *config.Config
@@ -39,11 +39,12 @@ func NewNotifyWorker(
 }
 
 // Register attaches PocketBase hooks so that any jobs record created or updated
-// with status="pending_notify" is dispatched to the worker.
+// with status="pending_notify" or status="error" is dispatched to the worker.
 func (w *NotifyWorker) Register() {
 	dispatch := func(e *core.RecordEvent) error {
 		record := e.Record
-		if record.GetString("status") == models.JobStatusPendingNotify {
+		status := record.GetString("status")
+		if status == models.JobStatusPendingNotify || status == models.JobStatusError {
 			select {
 			case w.jobCh <- record.Id:
 			default:
@@ -73,8 +74,7 @@ func (w *NotifyWorker) Start(ctx context.Context) {
 	w.app.Logger().Info("notify_worker: started")
 }
 
-// processJob fetches the record, verifies it is still eligible, sends the
-// Discord webhook embed, and marks the job as done.
+// processJob fetches the record and routes it based on its current status.
 func (w *NotifyWorker) processJob(_ context.Context, recordID string) {
 	record, err := w.app.FindRecordById("jobs", recordID)
 	if err != nil {
@@ -82,13 +82,20 @@ func (w *NotifyWorker) processJob(_ context.Context, recordID string) {
 		return
 	}
 
-	if record.GetString("status") != models.JobStatusPendingNotify {
-		return
+	switch record.GetString("status") {
+	case models.JobStatusPendingNotify:
+		w.processPendingNotify(record)
+	case models.JobStatusError:
+		w.processErrorWebhook(record)
 	}
+}
 
+// processPendingNotify claims the job, sends a success webhook, and marks the
+// job done.
+func (w *NotifyWorker) processPendingNotify(record *core.Record) {
 	record.Set("status", models.JobStatusProcessingNotify)
 	if err := w.app.Save(record); err != nil {
-		w.app.Logger().Error("notify_worker: claim job failed", "jobId", recordID, "error", err)
+		w.app.Logger().Error("notify_worker: claim job failed", "jobId", record.Id, "error", err)
 		return
 	}
 
@@ -105,10 +112,10 @@ func (w *NotifyWorker) processJob(_ context.Context, recordID string) {
 	if torrent != nil {
 		torrentName = torrent.Name
 	} else {
-		w.app.Logger().Warn("notify_worker: torrent not found in qui, using hash as name", "jobId", recordID, "torrentHash", torrentHash)
+		w.app.Logger().Warn("notify_worker: torrent not found in qui, using hash as name", "jobId", record.Id, "torrentHash", torrentHash)
 	}
 
-	w.app.Logger().Debug("notify_worker: sending webhook", "jobId", recordID, "torrentName", torrentName, "category", category)
+	w.app.Logger().Debug("notify_worker: sending webhook", "jobId", record.Id, "torrentName", torrentName, "category", category)
 
 	if err := w.webhookClient.Send(torrentName, category); err != nil {
 		w.failJob(record, "send webhook: "+err.Error())
@@ -118,14 +125,38 @@ func (w *NotifyWorker) processJob(_ context.Context, recordID string) {
 	record.Set("status", models.JobStatusDone)
 	record.Set("completed", time.Now())
 	if err := w.app.Save(record); err != nil {
-		w.app.Logger().Error("notify_worker: save done status failed", "jobId", recordID, "error", err)
+		w.app.Logger().Error("notify_worker: save done status failed", "jobId", record.Id, "error", err)
 		return
 	}
 
-	w.app.Logger().Info("notify_worker: job completed", "jobId", recordID, "torrentName", torrentName)
+	w.app.Logger().Info("notify_worker: job completed", "jobId", record.Id, "torrentName", torrentName)
+}
+
+// processErrorWebhook sends a failure webhook for a job that has already
+// transitioned to the error state (by this or another worker). The record is
+// not modified.
+func (w *NotifyWorker) processErrorWebhook(record *core.Record) {
+	torrentHash := record.GetString("torrent_hash")
+	category := record.GetString("category")
+	errMsg := record.GetString("error")
+
+	torrentName := torrentHash
+	torrent, err := w.quiClient.GetTorrent(torrentHash)
+	if err != nil {
+		w.app.Logger().Warn("notify_worker: could not fetch torrent for error webhook, using hash as name", "jobId", record.Id, "error", err)
+	} else if torrent != nil {
+		torrentName = torrent.Name
+	}
+
+	w.app.Logger().Debug("notify_worker: sending error webhook", "jobId", record.Id, "torrentName", torrentName, "category", category)
+
+	if err := w.webhookClient.SendError(torrentName, category, errMsg); err != nil {
+		w.app.Logger().Error("notify_worker: send error webhook failed", "jobId", record.Id, "error", err)
+	}
 }
 
 // failJob transitions a job record to the error state with a message.
+// The error webhook is sent by the Register hook reacting to the status change.
 func (w *NotifyWorker) failJob(record *core.Record, msg string) {
 	w.app.Logger().Error("notify_worker: job failed", "jobId", record.Id, "error", msg)
 	record.Set("status", models.JobStatusError)

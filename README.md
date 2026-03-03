@@ -104,6 +104,8 @@ For anime final title that will be used in NAS folder, it should reference anime
 6. qb-auto call qui API to get torrent details
 7. qb-auto determine destination folder name (follow existing naming pattern)
 8. qb-auto execute `rsync` and copy torrent files to NAS
+   - Multi-file torrent: `content_path` is a directory; rsync copies the whole folder into the anime title folder, preserving the torrent folder name
+   - Single-file torrent: `content_path` is a file; rsync copies the file directly into the anime title folder (no subfolder created)
 9. qb-auto call qui API to mark torrent as copied (apply tag `done`)
 10. qb-auto call anime list API to mark anime as downloaded
 11. qb-auto send webhook to notify torrent job completed (via notify_worker, see below)

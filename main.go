@@ -115,6 +115,7 @@ func main() {
 	})
 
 	app.RootCmd.AddCommand(newInstallCmd())
+	app.RootCmd.AddCommand(newUpdateCmd())
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)

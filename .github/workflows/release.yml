@@ -28,11 +28,14 @@ jobs:
           DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
             -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
-            -o qb-auto .
+            -o qb-auto-linux-amd64 .
+          sha256sum qb-auto-linux-amd64 | awk '{print $1}' > qb-auto-linux-amd64.sha256
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          files: qb-auto
+          files: |
+            qb-auto-linux-amd64
+            qb-auto-linux-amd64.sha256

@@ -101,6 +101,9 @@ func (w *NotifyWorker) processPendingNotify(record *core.Record) {
 
 	torrentHash := record.GetString("torrent_hash")
 	category := record.GetString("category")
+	if category == "" {
+		category = "None"
+	}
 
 	torrent, err := w.quiClient.GetTorrent(torrentHash)
 	if err != nil {
@@ -115,9 +118,28 @@ func (w *NotifyWorker) processPendingNotify(record *core.Record) {
 		w.app.Logger().Warn("notify_worker: torrent not found in qui, using hash as name", "jobId", record.Id, "torrentHash", torrentHash)
 	}
 
-	w.app.Logger().Debug("notify_worker: sending webhook", "jobId", record.Id, "torrentName", torrentName, "category", category)
+	animeTitle := record.GetString("anime_title")
 
-	if err := w.webhookClient.Send(torrentName, category); err != nil {
+	w.app.Logger().Debug("notify_worker: sending webhook", "jobId", record.Id, "torrentName", torrentName, "category", category, "animeTitle", animeTitle)
+
+	fields := []webhookclient.DiscordField{
+		{Name: "Name", Value: torrentName, Inline: false},
+		{Name: "Category", Value: category, Inline: true},
+	}
+	if category == "anime" && animeTitle != "" {
+		fields = append(fields, webhookclient.DiscordField{
+			Name: "Anime Title", Value: animeTitle, Inline: false,
+		})
+	}
+
+	embed := webhookclient.DiscordEmbed{
+		Title:  "Done: " + torrentName,
+		Color:  3447003,
+		Fields: fields,
+		Footer: webhookclient.DiscordFooter{Text: "qBittorrent"},
+	}
+
+	if err := w.webhookClient.Send(embed); err != nil {
 		w.failJob(record, "send webhook: "+err.Error())
 		return
 	}
@@ -150,7 +172,25 @@ func (w *NotifyWorker) processErrorWebhook(record *core.Record) {
 
 	w.app.Logger().Debug("notify_worker: sending error webhook", "jobId", record.Id, "torrentName", torrentName, "category", category)
 
-	if err := w.webhookClient.SendError(torrentName, category, errMsg); err != nil {
+	if category == "" {
+		category = "None"
+	}
+	if torrentName == "" {
+		torrentName = "Unknown"
+	}
+
+	errEmbed := webhookclient.DiscordEmbed{
+		Title: "Failed: " + torrentName,
+		Color: 15158332,
+		Fields: []webhookclient.DiscordField{
+			{Name: "Name", Value: torrentName, Inline: false},
+			{Name: "Category", Value: category, Inline: true},
+			{Name: "Error", Value: errMsg, Inline: false},
+		},
+		Footer: webhookclient.DiscordFooter{Text: "qBittorrent"},
+	}
+
+	if err := w.webhookClient.Send(errEmbed); err != nil {
 		w.app.Logger().Error("notify_worker: send error webhook failed", "jobId", record.Id, "error", err)
 	}
 }

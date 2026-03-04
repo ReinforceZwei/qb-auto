@@ -7,26 +7,29 @@ import (
 	"resty.dev/v3"
 )
 
-type discordFooter struct {
+// DiscordFooter is the footer section of a Discord embed.
+type DiscordFooter struct {
 	Text string `json:"text"`
 }
 
-type discordField struct {
+// DiscordField is a single field within a Discord embed.
+type DiscordField struct {
 	Name   string `json:"name"`
 	Value  string `json:"value"`
 	Inline bool   `json:"inline"`
 }
 
-type discordEmbed struct {
+// DiscordEmbed represents a Discord message embed.
+type DiscordEmbed struct {
 	Title  string         `json:"title"`
 	Color  int            `json:"color"`
-	Fields []discordField `json:"fields"`
-	Footer discordFooter  `json:"footer"`
+	Fields []DiscordField `json:"fields"`
+	Footer DiscordFooter  `json:"footer"`
 }
 
 type discordPayload struct {
 	Username string         `json:"username"`
-	Embeds   []discordEmbed `json:"embeds"`
+	Embeds   []DiscordEmbed `json:"embeds"`
 }
 
 // Client sends Discord webhook notifications.
@@ -54,63 +57,16 @@ func (c *Client) post(payload discordPayload) error {
 	return nil
 }
 
-// Send posts a Discord embed notification for a completed torrent.
+// Send posts a Discord embed notification.
 // If the client has no webhook URL configured, Send returns nil immediately.
-func (c *Client) Send(torrentName, category string) error {
+func (c *Client) Send(embed DiscordEmbed) error {
 	if c.webhookURL == "" {
 		return nil
 	}
 
-	if category == "" {
-		category = "None"
-	}
-
 	payload := discordPayload{
 		Username: "qbittorrent",
-		Embeds: []discordEmbed{
-			{
-				Title: "Done: " + torrentName,
-				Color: 3447003,
-				Fields: []discordField{
-					{Name: "Name", Value: torrentName, Inline: false},
-					{Name: "Category", Value: category, Inline: true},
-				},
-			Footer: discordFooter{Text: "qBittorrent"},
-		},
-	},
-	}
-
-	return c.post(payload)
-}
-
-// SendError posts a Discord embed notification for a failed job.
-// If the client has no webhook URL configured, SendError returns nil immediately.
-func (c *Client) SendError(torrentName, category, errMsg string) error {
-	if c.webhookURL == "" {
-		return nil
-	}
-
-	if category == "" {
-		category = "None"
-	}
-	if torrentName == "" {
-		torrentName = "Unknown"
-	}
-
-	payload := discordPayload{
-		Username: "qbittorrent",
-		Embeds: []discordEmbed{
-			{
-				Title: "Failed: " + torrentName,
-				Color: 15158332,
-				Fields: []discordField{
-					{Name: "Name", Value: torrentName, Inline: false},
-					{Name: "Category", Value: category, Inline: true},
-					{Name: "Error", Value: errMsg, Inline: false},
-				},
-				Footer: discordFooter{Text: "qBittorrent"},
-			},
-		},
+		Embeds:   []DiscordEmbed{embed},
 	}
 
 	return c.post(payload)

@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 
 	"github.com/ReinforceZwei/qb-auto/clients/animelist"
+	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
 	rsyncclient "github.com/ReinforceZwei/qb-auto/clients/rsync"
 	tmdbclient "github.com/ReinforceZwei/qb-auto/clients/tmdb"
 	webhookclient "github.com/ReinforceZwei/qb-auto/clients/webhook"
+	wikiclient "github.com/ReinforceZwei/qb-auto/clients/wikipedia"
 	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/llm"
 	"github.com/ReinforceZwei/qb-auto/routes"
@@ -95,9 +97,15 @@ func main() {
 			return err
 		}
 
-		routes.RegisterAnimeTitleRoutes(se, llmClient, tmdbClient, animeListClient)
+		var braveClient *braveclient.Client
+		if cfg.BraveAPIKey != "" {
+			braveClient = braveclient.New(cfg.BraveAPIKey)
+		}
+		wikiClient := wikiclient.New()
 
-		tw := workers.NewTitleWorker(app, cfg, quiClient, llmClient, tmdbClient, animeListClient)
+		routes.RegisterAnimeTitleRoutes(se, llmClient, tmdbClient, animeListClient, braveClient, wikiClient)
+
+		tw := workers.NewTitleWorker(app, cfg, quiClient, llmClient, tmdbClient, animeListClient, braveClient, wikiClient)
 		tw.Register()
 		tw.Start(ctx)
 

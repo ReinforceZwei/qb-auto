@@ -23,6 +23,9 @@ type Config struct {
 	// TMDb
 	TMDbAPIKey string `json:"tmdb_api_key"` // TMDB_API_KEY
 
+	// Brave Search API (optional) — enables Wikipedia fallback when TMDb finds nothing
+	BraveAPIKey string `json:"brave_api_key"` // BRAVE_API_KEY
+
 	// Anime list API
 	AnimeListBaseURL string `json:"animelist_base_url"` // ANIMELIST_BASE_URL
 	AnimeListUsername string `json:"animelist_username"` // ANIMELIST_USERNAME
@@ -132,6 +135,7 @@ func LoadFromFile(path string) (*Config, error) {
 	applyEnvString(&cfg.QuiBaseURL, "QUI_BASE_URL")
 	applyEnvString(&cfg.QuiAPIKey, "QUI_API_KEY")
 	applyEnvString(&cfg.TMDbAPIKey, "TMDB_API_KEY")
+	applyEnvString(&cfg.BraveAPIKey, "BRAVE_API_KEY")
 	applyEnvString(&cfg.AnimeListBaseURL, "ANIMELIST_BASE_URL")
 	applyEnvString(&cfg.AnimeListUsername, "ANIMELIST_USERNAME")
 	applyEnvString(&cfg.AnimeListPassword, "ANIMELIST_PASSWORD")

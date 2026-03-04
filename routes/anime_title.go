@@ -4,7 +4,9 @@ import (
 	"net/http"
 
 	"github.com/ReinforceZwei/qb-auto/clients/animelist"
+	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	tmdbclient "github.com/ReinforceZwei/qb-auto/clients/tmdb"
+	wikiclient "github.com/ReinforceZwei/qb-auto/clients/wikipedia"
 	"github.com/ReinforceZwei/qb-auto/llm"
 	"github.com/ReinforceZwei/qb-auto/services"
 	"github.com/pocketbase/pocketbase/core"
@@ -25,11 +27,15 @@ type resolveAnimeTitleResponse struct {
 }
 
 // RegisterAnimeTitleRoutes registers the resolve-anime-title route on the serve event.
+// braveClient and wikiClient may be nil; when provided they enable the Wikipedia
+// fallback for title resolution.
 func RegisterAnimeTitleRoutes(
 	se *core.ServeEvent,
 	llmClient *llm.Client,
 	tmdbClient *tmdbclient.Client,
 	animeListClient *animelist.Client,
+	braveClient *braveclient.Client,
+	wikiClient *wikiclient.Client,
 ) {
 	se.Router.POST("/api/resolve-anime-title", func(e *core.RequestEvent) error {
 		var req resolveAnimeTitleRequest
@@ -44,7 +50,7 @@ func RegisterAnimeTitleRoutes(
 			})
 		}
 
-		resolved, err := services.ResolveAnimeTitle(e.Request.Context(), req.FolderName, llmClient, tmdbClient)
+		resolved, err := services.ResolveAnimeTitle(e.Request.Context(), req.FolderName, llmClient, tmdbClient, braveClient, wikiClient)
 		if err != nil {
 			return e.JSON(http.StatusInternalServerError, map[string]string{
 				"error": err.Error(),

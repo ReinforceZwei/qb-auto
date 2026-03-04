@@ -70,6 +70,50 @@ func (c *Client) ExtractAnimeTitle(ctx context.Context, folderName string) (stri
 	return result.Title, nil
 }
 
+// WikipediaTitleInfo holds the anime title fields extracted from a Wikipedia
+// wikitext blob by the LLM.
+type WikipediaTitleInfo struct {
+	// ChineseTitle is the Traditional Chinese page title from Wikipedia.
+	ChineseTitle string
+	// OriginalTitle is the original Japanese title from the infobox.
+	OriginalTitle string
+	// OfficialTWTitle is the official Taiwan translation from the 正式譯名 infobox
+	// field, or an empty string when the field is absent.
+	OfficialTWTitle string
+}
+
+// ExtractTitleFromWikitext asks the LLM to extract anime title information from
+// a Traditional Chinese Wikipedia wikitext blob. It returns the Chinese title,
+// the original Japanese title, and the official TW translation (if any).
+func (c *Client) ExtractTitleFromWikitext(ctx context.Context, wikitext string) (*WikipediaTitleInfo, error) {
+	messages := []*schema.Message{
+		{Role: schema.System, Content: promptExtractTitleFromWikitext},
+		{Role: schema.User, Content: wikitext},
+	}
+
+	resp, err := c.model.Generate(ctx, messages)
+	if err != nil {
+		return nil, fmt.Errorf("llm: extract title from wikitext: %w", err)
+	}
+
+	var result struct {
+		ChineseTitle    string `json:"chinese_title"`
+		OriginalTitle   string `json:"original_title"`
+		OfficialTWTitle string `json:"official_tw_title"`
+	}
+	if err := parseJSONResponse(resp.Content, &result); err != nil {
+		return nil, fmt.Errorf("llm: extract title from wikitext: %w", err)
+	}
+	if result.ChineseTitle == "" {
+		return nil, fmt.Errorf("llm: extract title from wikitext: LLM returned empty chinese_title")
+	}
+	return &WikipediaTitleInfo{
+		ChineseTitle:    result.ChineseTitle,
+		OriginalTitle:   result.OriginalTitle,
+		OfficialTWTitle: result.OfficialTWTitle,
+	}, nil
+}
+
 // PickBestTMDbMatch asks the LLM to choose the TMDb result that best matches the
 // original folder name. Returns the 0-based index of the chosen candidate, or -1
 // if the LLM finds no suitable match.

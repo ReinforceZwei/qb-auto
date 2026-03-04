@@ -4,8 +4,10 @@ import (
 	"context"
 
 	"github.com/ReinforceZwei/qb-auto/clients/animelist"
+	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
 	tmdbclient "github.com/ReinforceZwei/qb-auto/clients/tmdb"
+	wikiclient "github.com/ReinforceZwei/qb-auto/clients/wikipedia"
 	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/llm"
 	"github.com/ReinforceZwei/qb-auto/models"
@@ -22,11 +24,17 @@ type TitleWorker struct {
 	llmClient       *llm.Client
 	tmdbClient      *tmdbclient.Client
 	animeListClient *animelist.Client
-	jobCh           chan string // buffered channel of job record IDs
+	// braveClient and wikiClient are optional; when non-nil they enable the
+	// Wikipedia-based fallback for title resolution.
+	braveClient *braveclient.Client
+	wikiClient  *wikiclient.Client
+	jobCh       chan string // buffered channel of job record IDs
 }
 
 // NewTitleWorker creates a TitleWorker. The job channel is buffered at
 // TitleWorkerCount*10 to absorb bursts without blocking hook handlers.
+// braveClient and wikiClient may be nil; pass them to enable the Wikipedia
+// fallback when TMDb finds no match.
 func NewTitleWorker(
 	app core.App,
 	cfg *config.Config,
@@ -34,6 +42,8 @@ func NewTitleWorker(
 	llmClient *llm.Client,
 	tmdbClient *tmdbclient.Client,
 	animeListClient *animelist.Client,
+	braveClient *braveclient.Client,
+	wikiClient *wikiclient.Client,
 ) *TitleWorker {
 	return &TitleWorker{
 		app:             app,
@@ -42,6 +52,8 @@ func NewTitleWorker(
 		llmClient:       llmClient,
 		tmdbClient:      tmdbClient,
 		animeListClient: animeListClient,
+		braveClient:     braveClient,
+		wikiClient:      wikiClient,
 		jobCh:           make(chan string, cfg.TitleWorkerCount*10),
 	}
 }
@@ -123,7 +135,7 @@ func (w *TitleWorker) processJob(ctx context.Context, recordID string) {
 
 	w.app.Logger().Debug("title_worker: fetched torrent info", "jobId", recordID, "torrentName", torrent.Name, "torrentHash", torrentHash)
 
-	result, err := services.DetermineAnimeTitle(ctx, torrent.Name, w.llmClient, w.tmdbClient, w.animeListClient)
+	result, err := services.DetermineAnimeTitle(ctx, torrent.Name, w.llmClient, w.tmdbClient, w.animeListClient, w.braveClient, w.wikiClient)
 	if err != nil {
 		w.failJob(record, err.Error())
 		return

@@ -41,6 +41,36 @@ If none of the records match the title, return -1.
 Return ONLY a JSON object in this exact format (no markdown, no explanation):
 {"index": <0-based index of best match, or -1 if none match>}`
 
+// promptExtractTitleFromWikitext is the system prompt used to extract anime
+// title information from a Traditional Chinese Wikipedia wikitext blob.
+//
+// The wikitext typically contains an "Infobox animanga" template with fields
+// like 標題 (title), 日文名稱 (Japanese name), 羅馬字 (romaji), and 正式譯名
+// (official translation). The LLM should extract the relevant fields and return
+// them as a JSON object.
+//
+// Response format: JSON object
+//
+//	{"chinese_title": "...", "original_title": "...", "official_tw_title": "..."}
+//
+// Where:
+//   - chinese_title: the Traditional Chinese page title (e.g. 忍者與殺手的同住日常)
+//   - original_title: the original Japanese title (e.g. 忍者と殺し屋のふたりぐらし)
+//   - official_tw_title: the official TW translation from 正式譯名 field, or empty string if absent
+const promptExtractTitleFromWikitext = `You are a helpful assistant that extracts anime title information from Wikipedia wikitext.
+
+You will be given a Wikipedia article in wikitext format (Traditional Chinese).
+
+Extract the following fields:
+1. chinese_title: The Traditional Chinese article title (usually the page title or the 標題 field in the infobox)
+2. original_title: The original Japanese title (usually from 日文名稱 field in the infobox)
+3. official_tw_title: The official Traditional Chinese (TW) translation from the 正式譯名 field in the infobox. Return empty string if this field is absent.
+
+For official_tw_title, if the 正式譯名 field contains multiple translations separated by <br>, take the one from 台灣 (Taiwan). Strip any parenthetical publisher names (e.g. "（台灣角川）").
+
+Return ONLY a JSON object in this exact format (no markdown, no explanation):
+{"chinese_title": "<title>", "original_title": "<title>", "official_tw_title": "<title or empty string>"}`
+
 // promptPickBestMatch is the system prompt used to select the best TMDb TV show
 // result for a given anime folder name.
 //

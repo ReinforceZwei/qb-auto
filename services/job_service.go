@@ -26,6 +26,7 @@ func CreateJob(app core.App, torrentHash string, category string) (*core.Record,
 			return existing, nil
 		}
 		existing.Set("status", pendingStatus)
+		existing.Set("error", "")
 		if err := app.Save(existing); err != nil {
 			return nil, err
 		}

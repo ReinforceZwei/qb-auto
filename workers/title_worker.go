@@ -3,6 +3,8 @@ package workers
 import (
 	"context"
 
+	"github.com/pocketbase/dbx"
+
 	"github.com/ReinforceZwei/qb-auto/clients/animelist"
 	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
@@ -153,6 +155,44 @@ func (w *TitleWorker) processJob(ctx context.Context, recordID string) {
 	}
 
 	w.app.Logger().Info("title_worker: job completed", "jobId", recordID, "animeTitle", result.AnimeTitle)
+}
+
+// Recover re-enqueues any jobs that were left in a non-terminal state from a
+// previous run. Jobs stuck in processing_title are rolled back to pending so
+// they re-enter the normal flow cleanly.
+func (w *TitleWorker) Recover() {
+	records, err := w.app.FindRecordsByFilter(
+		"jobs",
+		"(status = {:pending} || status = {:processing}) && category = 'anime'",
+		"", 0, 0,
+		dbx.Params{
+			"pending":    models.JobStatusPending,
+			"processing": models.JobStatusProcessingTitle,
+		},
+	)
+	if err != nil {
+		w.app.Logger().Error("title_worker: recovery query failed", "error", err)
+		return
+	}
+	if len(records) == 0 {
+		return
+	}
+
+	w.app.Logger().Info("title_worker: recovering stuck jobs", "count", len(records))
+	for _, record := range records {
+		if record.GetString("status") == models.JobStatusProcessingTitle {
+			record.Set("status", models.JobStatusPending)
+			if err := w.app.Save(record); err != nil {
+				w.app.Logger().Error("title_worker: recover rollback failed", "jobId", record.Id, "error", err)
+				continue
+			}
+		}
+		select {
+		case w.jobCh <- record.Id:
+		default:
+			w.app.Logger().Warn("title_worker: job queue full during recovery, dropping job", "jobId", record.Id)
+		}
+	}
 }
 
 // failJob transitions a job record to the error state with a message.

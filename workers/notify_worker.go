@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/pocketbase/dbx"
+
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
 	webhookclient "github.com/ReinforceZwei/qb-auto/clients/webhook"
 	"github.com/ReinforceZwei/qb-auto/config"
@@ -192,6 +194,45 @@ func (w *NotifyWorker) processErrorWebhook(record *core.Record) {
 
 	if err := w.webhookClient.Send(errEmbed); err != nil {
 		w.app.Logger().Error("notify_worker: send error webhook failed", "jobId", record.Id, "error", err)
+	}
+}
+
+// Recover re-enqueues any jobs that were left in a non-terminal state from a
+// previous run. Jobs stuck in processing_notify are rolled back to
+// pending_notify so they re-enter the normal flow cleanly. Sending the webhook
+// a second time is acceptable (idempotent from the user's perspective).
+func (w *NotifyWorker) Recover() {
+	records, err := w.app.FindRecordsByFilter(
+		"jobs",
+		"status = {:pending} || status = {:processing}",
+		"", 0, 0,
+		dbx.Params{
+			"pending":    models.JobStatusPendingNotify,
+			"processing": models.JobStatusProcessingNotify,
+		},
+	)
+	if err != nil {
+		w.app.Logger().Error("notify_worker: recovery query failed", "error", err)
+		return
+	}
+	if len(records) == 0 {
+		return
+	}
+
+	w.app.Logger().Info("notify_worker: recovering stuck jobs", "count", len(records))
+	for _, record := range records {
+		if record.GetString("status") == models.JobStatusProcessingNotify {
+			record.Set("status", models.JobStatusPendingNotify)
+			if err := w.app.Save(record); err != nil {
+				w.app.Logger().Error("notify_worker: recover rollback failed", "jobId", record.Id, "error", err)
+				continue
+			}
+		}
+		select {
+		case w.jobCh <- record.Id:
+		default:
+			w.app.Logger().Warn("notify_worker: job queue full during recovery, dropping job", "jobId", record.Id)
+		}
 	}
 }
 

@@ -5,6 +5,8 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/pocketbase/dbx"
+
 	"github.com/ReinforceZwei/qb-auto/clients/animelist"
 	rsyncclient "github.com/ReinforceZwei/qb-auto/clients/rsync"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
@@ -162,6 +164,45 @@ func (w *RsyncWorker) processJob(ctx context.Context, recordID string) {
 	}
 
 	w.app.Logger().Info("rsync_worker: job completed", "jobId", recordID, "animeTitle", animeTitle)
+}
+
+// Recover re-enqueues any jobs that were left in a non-terminal state from a
+// previous run. Jobs stuck in processing_rsync are rolled back to pending_rsync
+// so they re-enter the normal flow cleanly. rsync is idempotent, so re-running
+// a partially completed transfer is safe.
+func (w *RsyncWorker) Recover() {
+	records, err := w.app.FindRecordsByFilter(
+		"jobs",
+		"status = {:pending} || status = {:processing}",
+		"", 0, 0,
+		dbx.Params{
+			"pending":    models.JobStatusPendingRsync,
+			"processing": models.JobStatusProcessingRsync,
+		},
+	)
+	if err != nil {
+		w.app.Logger().Error("rsync_worker: recovery query failed", "error", err)
+		return
+	}
+	if len(records) == 0 {
+		return
+	}
+
+	w.app.Logger().Info("rsync_worker: recovering stuck jobs", "count", len(records))
+	for _, record := range records {
+		if record.GetString("status") == models.JobStatusProcessingRsync {
+			record.Set("status", models.JobStatusPendingRsync)
+			if err := w.app.Save(record); err != nil {
+				w.app.Logger().Error("rsync_worker: recover rollback failed", "jobId", record.Id, "error", err)
+				continue
+			}
+		}
+		select {
+		case w.jobCh <- record.Id:
+		default:
+			w.app.Logger().Warn("rsync_worker: job queue full during recovery, dropping job", "jobId", record.Id)
+		}
+	}
 }
 
 // failJob transitions a job record to the error state with a message.

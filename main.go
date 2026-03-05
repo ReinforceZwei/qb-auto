@@ -119,6 +119,11 @@ func main() {
 		nw.Register()
 		nw.Start(ctx)
 
+		// Re-enqueue any jobs that were interrupted by a previous crash or restart.
+		tw.Recover()
+		rw.Recover()
+		nw.Recover()
+
 		return se.Next()
 	})
 

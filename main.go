@@ -76,6 +76,14 @@ func main() {
 			se.Server.Addr = cfg.HttpAddr
 		}
 
+		settings := se.App.Settings()
+		if settings.Meta.AppName != "qb-auto" {
+			settings.Meta.AppName = "qb-auto"
+			if err := se.App.Save(settings); err != nil {
+				log.Printf("Failed to save settings: %v", err)
+			}
+		}
+
 		routes.RegisterTorrentRoutes(se, cfg)
 
 		ctx := context.Background()

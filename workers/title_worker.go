@@ -143,11 +143,12 @@ func (w *TitleWorker) processJob(ctx context.Context, recordID string) {
 		return
 	}
 
-	w.app.Logger().Debug("title_worker: title determined", "jobId", recordID, "animeTitle", result.AnimeTitle, "tmdbId", result.TMDbID, "animeListId", result.AnimeListID)
+	w.app.Logger().Debug("title_worker: title determined", "jobId", recordID, "animeTitle", result.AnimeTitle, "tmdbId", result.TMDbID, "tmdbSeason", result.SeasonNumber, "animeListId", result.AnimeListID)
 
 	record.Set("anime_title", result.AnimeTitle)
 	record.Set("anime_list_id", result.AnimeListID)
 	record.Set("tmdb_id", result.TMDbID)
+	record.Set("tmdb_season", result.SeasonNumber)
 	record.Set("status", models.JobStatusPendingRsync)
 	if err := w.app.Save(record); err != nil {
 		w.app.Logger().Error("title_worker: save result failed", "jobId", recordID, "error", err)

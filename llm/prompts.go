@@ -21,6 +21,27 @@ Given a torrent folder name, extract only the core anime title. Remove:
 Return ONLY a JSON object in this exact format (no markdown, no explanation):
 {"title": "<extracted title>"}`
 
+// promptExtractSeasonNumber is the system prompt used to extract a season number
+// from a downloaded torrent folder name.
+//
+// Common season indicators: "S02", "第二季", "Season 2", "2nd Season".
+// Defaults to 1 when no season information is present.
+// Season 0 is reserved for specials/OVAs, consistent with TMDb convention.
+//
+// Response format: JSON object {"season": <integer>}
+const promptExtractSeasonNumber = `You are a helpful assistant that extracts season numbers from anime torrent folder names.
+
+Given a torrent folder name, identify the season number. Season indicators include:
+- Latin notation: S01, S02, S1, S2, etc.
+- English words: "Season 1", "Season 2", "1st Season", "2nd Season", "3rd Season", etc.
+- Chinese numerals: 第一季, 第二季, 第三季, etc.
+- Season 0 means specials or OVA collections (e.g. "S00", "Season 0", "Specials", "OVA")
+
+If no season information is found, return 1 (first season by default).
+
+Return ONLY a JSON object in this exact format (no markdown, no explanation):
+{"season": <integer season number>}`
+
 // promptPickBestAnimeListMatch is the system prompt used to select the best
 // anime list record for a given resolved Traditional Chinese anime title.
 //

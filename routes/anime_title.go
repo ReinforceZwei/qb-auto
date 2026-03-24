@@ -21,9 +21,10 @@ type resolveAnimeTitleRequest struct {
 // resolveAnimeTitleResponse is the JSON body returned on success.
 // AnimeListID is omitted from the response when SearchAnimeList was false.
 type resolveAnimeTitleResponse struct {
-	AnimeTitle  string `json:"anime_title"`
-	TMDbID      int    `json:"tmdb_id"`
-	AnimeListID *int   `json:"anime_list_id,omitempty"`
+	AnimeTitle   string `json:"anime_title"`
+	TMDbID       int    `json:"tmdb_id"`
+	SeasonNumber int    `json:"season_number"`
+	AnimeListID  *int   `json:"anime_list_id,omitempty"`
 }
 
 // RegisterAnimeTitleRoutes registers the resolve-anime-title route on the serve event.
@@ -58,8 +59,9 @@ func RegisterAnimeTitleRoutes(
 		}
 
 		resp := resolveAnimeTitleResponse{
-			AnimeTitle: resolved.AnimeTitle,
-			TMDbID:     resolved.TMDbID,
+			AnimeTitle:   resolved.AnimeTitle,
+			TMDbID:       resolved.TMDbID,
+			SeasonNumber: resolved.SeasonNumber,
 		}
 
 		if req.SearchAnimeList {

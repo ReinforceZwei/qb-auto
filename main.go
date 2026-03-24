@@ -53,6 +53,7 @@ func main() {
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
 		// Only auto migrate when running from go run
 		Automigrate: osutils.IsProbablyGoRun(),
+		Dir:         "./migrations",
 	})
 
 	app.RootCmd.Version = fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)

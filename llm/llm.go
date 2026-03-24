@@ -70,6 +70,28 @@ func (c *Client) ExtractAnimeTitle(ctx context.Context, folderName string) (stri
 	return result.Title, nil
 }
 
+// ExtractSeasonNumber asks the LLM to identify the season number from a torrent
+// folder name. Returns 1 when no season information is present in the name.
+func (c *Client) ExtractSeasonNumber(ctx context.Context, folderName string) (int, error) {
+	messages := []*schema.Message{
+		{Role: schema.System, Content: promptExtractSeasonNumber},
+		{Role: schema.User, Content: folderName},
+	}
+
+	resp, err := c.model.Generate(ctx, messages)
+	if err != nil {
+		return 0, fmt.Errorf("llm: extract season number: %w", err)
+	}
+
+	var result struct {
+		Season int `json:"season"`
+	}
+	if err := parseJSONResponse(resp.Content, &result); err != nil {
+		return 0, fmt.Errorf("llm: extract season number: %w", err)
+	}
+	return result.Season, nil
+}
+
 // WikipediaTitleInfo holds the anime title fields extracted from a Wikipedia
 // wikitext blob by the LLM.
 type WikipediaTitleInfo struct {

@@ -20,6 +20,9 @@ type ResolveTitleResult struct {
 	AnimeTitle string
 	// TMDbID is the TMDb TV show ID of the matched entry.
 	TMDbID int
+	// SeasonNumber is the season extracted from the folder name. Defaults to 1
+	// when no season information is present. 0 means specials, per TMDb convention.
+	SeasonNumber int
 }
 
 // TitleResult holds the confirmed anime title and associated identifiers.
@@ -30,6 +33,9 @@ type TitleResult struct {
 	AnimeListID int
 	// TMDbID is the TMDb TV show ID of the matched entry.
 	TMDbID int
+	// SeasonNumber is the season extracted from the folder name. Defaults to 1
+	// when no season information is present. 0 means specials, per TMDb convention.
+	SeasonNumber int
 }
 
 // ResolveAnimeTitle resolves a downloaded torrent folder name to a Traditional
@@ -66,6 +72,12 @@ func ResolveAnimeTitle(
 		return nil, fmt.Errorf("resolve anime title: %w", err)
 	}
 
+	// Step 1b — LLM: extract the season number from the folder name (defaults to 1).
+	seasonNumber, err := llmClient.ExtractSeasonNumber(ctx, folderName)
+	if err != nil {
+		return nil, fmt.Errorf("resolve anime title: %w", err)
+	}
+
 	// Step 2 — TMDb: search for TV shows matching the extracted title.
 	candidates, err := tmdbClient.SearchAnime(extractedTitle)
 	if err != nil {
@@ -97,7 +109,7 @@ func ResolveAnimeTitle(
 		chosen := candidates[chosenIdx]
 		zhTitle, err := tmdbClient.GetTraditionalChineseTitle(chosen.ID)
 		if err == nil {
-			return &ResolveTitleResult{AnimeTitle: zhTitle, TMDbID: chosen.ID}, nil
+			return &ResolveTitleResult{AnimeTitle: zhTitle, TMDbID: chosen.ID, SeasonNumber: seasonNumber}, nil
 		}
 		// No zh-TW title available for the matched show — fall through to Wikipedia.
 	}
@@ -105,7 +117,7 @@ func ResolveAnimeTitle(
 	// Wikipedia fallback: triggered when TMDb returned no candidates, the LLM
 	// picked no match, or the chosen show has no zh-TW title.
 	if braveClient != nil && wikiClient != nil {
-		result, fallbackErr := resolveViaWikipedia(ctx, folderName, extractedTitle, llmClient, tmdbClient, braveClient, wikiClient)
+		result, fallbackErr := resolveViaWikipedia(ctx, folderName, extractedTitle, seasonNumber, llmClient, tmdbClient, braveClient, wikiClient)
 		if fallbackErr != nil {
 			return nil, fmt.Errorf("resolve anime title: TMDb path failed for %q, Wikipedia fallback also failed: %w", folderName, fallbackErr)
 		}
@@ -141,6 +153,7 @@ func resolveViaWikipedia(
 	ctx context.Context,
 	folderName string,
 	extractedTitle string,
+	seasonNumber int,
 	llmClient *llm.Client,
 	tmdbClient *tmdbclient.Client,
 	braveClient *braveclient.Client,
@@ -231,7 +244,7 @@ func resolveViaWikipedia(
 	zhTWTitle, err := tmdbClient.GetTraditionalChineseTitle(chosen.ID)
 	if err == nil {
 		// 8a — TMDb has a zh-TW title: use it.
-		return &ResolveTitleResult{AnimeTitle: zhTWTitle, TMDbID: chosen.ID}, nil
+		return &ResolveTitleResult{AnimeTitle: zhTWTitle, TMDbID: chosen.ID, SeasonNumber: seasonNumber}, nil
 	}
 
 	// 8b — No zh-TW title in TMDb: use the official TW translation from Wikipedia,
@@ -240,7 +253,7 @@ func resolveViaWikipedia(
 	if animeTitle == "" {
 		animeTitle = titleInfo.ChineseTitle
 	}
-	return &ResolveTitleResult{AnimeTitle: animeTitle, TMDbID: chosen.ID}, nil
+	return &ResolveTitleResult{AnimeTitle: animeTitle, TMDbID: chosen.ID, SeasonNumber: seasonNumber}, nil
 }
 
 // findWikipediaURL returns the first URL in results whose host contains
@@ -358,9 +371,10 @@ func DetermineAnimeTitle(
 		if idx >= 0 && idx < len(searchResults) {
 			matched := searchResults[idx]
 			return &TitleResult{
-				AnimeTitle:  resolved.AnimeTitle,
-				AnimeListID: matched.ID,
-				TMDbID:      resolved.TMDbID,
+				AnimeTitle:   resolved.AnimeTitle,
+				AnimeListID:  matched.ID,
+				TMDbID:       resolved.TMDbID,
+				SeasonNumber: resolved.SeasonNumber,
 			}, nil
 		}
 	}
@@ -383,9 +397,10 @@ func DetermineAnimeTitle(
 		if idx >= 0 && idx < len(chunk) {
 			matched := chunk[idx]
 			return &TitleResult{
-				AnimeTitle:  resolved.AnimeTitle,
-				AnimeListID: matched.ID,
-				TMDbID:      resolved.TMDbID,
+				AnimeTitle:   resolved.AnimeTitle,
+				AnimeListID:  matched.ID,
+				TMDbID:       resolved.TMDbID,
+				SeasonNumber: resolved.SeasonNumber,
 			}, nil
 		}
 	}

@@ -206,11 +206,16 @@ func (c *Client) GetUnwatchedUndownloaded() ([]AnimeRecord, error) {
 
 // MarkDownloaded sets the downloaded flag on the record with the given ID.
 // If tmdbID is non-zero, the TMDb TV show page URL is also written to the url
-// field in the same request, avoiding a separate round trip.
-func (c *Client) MarkDownloaded(id int, tmdbID int) error {
+// field in the same request, avoiding a separate round trip. When seasonNumber
+// is also non-zero the URL points directly to that season's page.
+func (c *Client) MarkDownloaded(id int, tmdbID int, seasonNumber int) error {
 	fields := map[string]string{"downloaded": "true"}
 	if tmdbID != 0 {
-		fields["url"] = fmt.Sprintf("https://www.themoviedb.org/tv/%d", tmdbID)
+		if seasonNumber != 0 {
+			fields["url"] = fmt.Sprintf("https://www.themoviedb.org/tv/%d/season/%d", tmdbID, seasonNumber)
+		} else {
+			fields["url"] = fmt.Sprintf("https://www.themoviedb.org/tv/%d", tmdbID)
+		}
 	}
 
 	resp, err := c.withAuth(func() (*resty.Response, error) {

@@ -149,3 +149,89 @@ Config is loaded from `~/.config/qb-auto/config.json` with environment variable 
 | `brave_api_key` | `BRAVE_API_KEY` | | Enables Wikipedia fallback |
 | `title_worker_count` | `TITLE_WORKER_COUNT` | | Default: 1 |
 | `http_addr` | `HTTP_ADDR` | | Default: `127.0.0.1:8090` |
+
+## Installation
+
+Download the latest binary for your platform from the [GitHub releases page](https://github.com/ReinforceZwei/qb-auto/releases), then run the built-in installer to set up a systemd service:
+
+```bash
+# Download (example for linux/amd64)
+curl -Lo qb-auto https://github.com/ReinforceZwei/qb-auto/releases/latest/download/qb-auto_linux_amd64
+chmod +x qb-auto
+
+# Install systemd service (requires root)
+sudo ./qb-auto install
+```
+
+The `install` command is interactive:
+
+1. If `qb-auto` is not already on `$PATH`, it offers to copy the binary to `/usr/local/bin/qb-auto` (recommended).
+2. Writes the systemd template unit `/etc/systemd/system/qb-auto@.service` and runs `systemctl daemon-reload`.
+3. Detects the invoking user from `$SUDO_USER` and asks whether to `systemctl enable --now qb-auto@<user>`.
+
+After installation, manage the service with:
+
+```bash
+sudo systemctl start   qb-auto@<user>
+sudo systemctl stop    qb-auto@<user>
+sudo systemctl status  qb-auto@<user>
+sudo systemctl enable  qb-auto@<user>   # auto-start on boot
+```
+
+Run `qb-auto` once to generate the config template at `~/.config/qb-auto/config.json`, then fill in the required values before starting the service.
+
+## Upgrading
+
+qb-auto can update itself from GitHub releases. The binary verifies the checksum of the downloaded release before replacing itself atomically.
+
+Check whether a newer version is available:
+
+```bash
+qb-auto update
+```
+
+Install the latest release in-place:
+
+```bash
+# If the binary lives in a user-writable location
+qb-auto update install
+
+# If the binary is in /usr/local/bin or another root-owned path
+sudo qb-auto update install
+```
+
+After upgrading, restart the service to apply the new binary:
+
+```bash
+sudo systemctl restart qb-auto@<user>
+```
+
+## Development
+
+### Building
+
+```bash
+go build -o qb-auto .
+```
+
+### Release workflow
+
+Versions follow `vX.Y.Z` semver and are tracked via annotated git tags. The helper script `version.go` (compiled with `go run`, excluded from the regular build via `//go:build ignore`) automates tagging.
+
+```bash
+# Print current version (latest git tag)
+go run version.go
+
+# Bump and tag locally
+go run version.go patch          # v1.2.3 → v1.2.4
+go run version.go minor          # v1.2.3 → v1.3.0
+go run version.go major          # v1.2.3 → v2.0.0
+go run version.go v1.5.0         # explicit version
+
+# Bump, tag, and push to origin in one step
+go run version.go -p patch
+go run version.go --push minor
+```
+
+Pushing a tag triggers CI to build and publish a new GitHub release.
+

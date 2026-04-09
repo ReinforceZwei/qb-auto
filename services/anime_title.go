@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ReinforceZwei/qb-auto/clients/animelist"
+	animelistnext "github.com/ReinforceZwei/qb-auto/clients/animelistnext"
 	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	tmdbclient "github.com/ReinforceZwei/qb-auto/clients/tmdb"
 	wikiclient "github.com/ReinforceZwei/qb-auto/clients/wikipedia"
@@ -29,8 +29,9 @@ type ResolveTitleResult struct {
 type TitleResult struct {
 	// AnimeTitle is the Traditional Chinese (zh-TW) title confirmed via the anime list.
 	AnimeTitle string
-	// AnimeListID is the record ID in the anime list, used later to mark the anime as downloaded.
-	AnimeListID int
+	// AnimeListID is the PocketBase record ID from the animes collection, used
+	// later to mark the anime as downloaded.
+	AnimeListID string
 	// TMDbID is the TMDb TV show ID of the matched entry.
 	TMDbID int
 	// SeasonNumber is the season extracted from the folder name. Defaults to 1
@@ -146,9 +147,9 @@ func ResolveAnimeTitle(
 //  5. Fetch the zh Wikipedia page content (wikitext).
 //  6. LLM extracts Chinese title, original title, and official TW translation.
 //  7. Retry TMDb with the original title (or Chinese title as fallback search term).
-//  8a. TMDb found + zh-TW title available → return TMDb title.
-//  8b. TMDb found + no zh-TW title → return Wikipedia Chinese/official TW title.
-//  8c. TMDb still found nothing → return error.
+//     8a. TMDb found + zh-TW title available → return TMDb title.
+//     8b. TMDb found + no zh-TW title → return Wikipedia Chinese/official TW title.
+//     8c. TMDb still found nothing → return error.
 func resolveViaWikipedia(
 	ctx context.Context,
 	folderName string,
@@ -321,33 +322,21 @@ func findLangLink(links []wikiclient.LangLink, lang string) *wikiclient.LangLink
 	return nil
 }
 
-// animeListChunkSize is the maximum number of anime list records sent to the LLM
-// in a single call during the fallback search. Keeping it bounded avoids
-// excessively long prompts when the watch list is large.
-const animeListChunkSize = 150
-
 // DetermineAnimeTitle resolves a downloaded torrent folder name to a confirmed
-// Traditional Chinese anime title by running all 5 steps of the determination
-// flow (steps 1–4 via ResolveAnimeTitle, then step 5):
+// Traditional Chinese anime title. It runs title/season/TMDb resolution via
+// ResolveAnimeTitle, then looks up the corresponding record in the Anime List
+// Next PocketBase backend by matching tmdbId and tmdbSeasonNumber directly —
+// no text matching or LLM inference is used for the anime-list lookup.
 //
-//  5. Confirming the title exists in the anime list via LLM.
-//
-// Step 5 runs in two stages:
-//   - Stage A: search the anime list by title; if results exist, ask the LLM to
-//     pick the best match from those results.
-//   - Stage B (fallback): if the search returned nothing or the LLM found no
-//     match, fetch all unwatched+undownloaded records (sorted by addedTime desc)
-//     and ask the LLM in chunks of animeListChunkSize until a match is found.
-//
-// Returns an error (stopping further processing) if no TMDb match is found,
-// if the LLM cannot select a match, or if the anime list does not contain the
-// resolved title. All such cases are left to human review.
+// Returns an error when no TMDb match is found or when the animes collection
+// contains no record for the resolved TMDb ID + season. Both cases require
+// human review.
 func DetermineAnimeTitle(
 	ctx context.Context,
 	folderName string,
 	llmClient *llm.Client,
 	tmdbClient *tmdbclient.Client,
-	animeListClient *animelist.Client,
+	animeListClient *animelistnext.Client,
 	braveClient *braveclient.Client,
 	wikiClient *wikiclient.Client,
 ) (*TitleResult, error) {
@@ -356,64 +345,19 @@ func DetermineAnimeTitle(
 		return nil, fmt.Errorf("determine anime title: %w", err)
 	}
 
-	// Stage A — search the anime list by the resolved title and ask the LLM to confirm.
-	searchResults, err := animeListClient.Search(resolved.AnimeTitle)
+	// Look up the animes record by TMDb ID and season number directly.
+	record, err := animeListClient.FindByTMDb(resolved.TMDbID, resolved.SeasonNumber)
 	if err != nil {
-		return nil, fmt.Errorf("determine anime title: anime list search: %w", err)
+		return nil, fmt.Errorf("determine anime title: anime list lookup: %w", err)
+	}
+	if record == nil {
+		return nil, fmt.Errorf("determine anime title: no anime list record for TMDb id=%d season=%d — needs human review", resolved.TMDbID, resolved.SeasonNumber)
 	}
 
-	if len(searchResults) > 0 {
-		candidates := toAnimeListCandidates(searchResults)
-		idx, err := llmClient.PickBestAnimeListMatch(ctx, resolved.AnimeTitle, candidates)
-		if err != nil {
-			return nil, fmt.Errorf("determine anime title: llm pick from search results: %w", err)
-		}
-		if idx >= 0 && idx < len(searchResults) {
-			matched := searchResults[idx]
-			return &TitleResult{
-				AnimeTitle:   resolved.AnimeTitle,
-				AnimeListID:  matched.ID,
-				TMDbID:       resolved.TMDbID,
-				SeasonNumber: resolved.SeasonNumber,
-			}, nil
-		}
-	}
-
-	// Stage B — fallback: iterate the full unwatched+undownloaded list in chunks.
-	fullList, err := animeListClient.GetUnwatchedUndownloaded()
-	if err != nil {
-		return nil, fmt.Errorf("determine anime title: get unwatched undownloaded: %w", err)
-	}
-
-	for start := 0; start < len(fullList); start += animeListChunkSize {
-		end := min(start+animeListChunkSize, len(fullList))
-		chunk := fullList[start:end]
-
-		candidates := toAnimeListCandidates(chunk)
-		idx, err := llmClient.PickBestAnimeListMatch(ctx, resolved.AnimeTitle, candidates)
-		if err != nil {
-			return nil, fmt.Errorf("determine anime title: llm pick from fallback chunk [%d:%d]: %w", start, end, err)
-		}
-		if idx >= 0 && idx < len(chunk) {
-			matched := chunk[idx]
-			return &TitleResult{
-				AnimeTitle:   resolved.AnimeTitle,
-				AnimeListID:  matched.ID,
-				TMDbID:       resolved.TMDbID,
-				SeasonNumber: resolved.SeasonNumber,
-			}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("determine anime title: %q not found in anime list — needs human review", resolved.AnimeTitle)
-}
-
-// toAnimeListCandidates converts a slice of AnimeRecord to the slim candidate
-// type that is passed to the LLM (ID and Name only).
-func toAnimeListCandidates(records []animelist.AnimeRecord) []llm.AnimeListCandidate {
-	out := make([]llm.AnimeListCandidate, len(records))
-	for i, r := range records {
-		out[i] = llm.AnimeListCandidate{ID: r.ID, Name: r.Name}
-	}
-	return out
+	return &TitleResult{
+		AnimeTitle:   resolved.AnimeTitle,
+		AnimeListID:  record.ID,
+		TMDbID:       resolved.TMDbID,
+		SeasonNumber: resolved.SeasonNumber,
+	}, nil
 }

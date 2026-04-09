@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ReinforceZwei/qb-auto/clients/animelist"
+	"github.com/ReinforceZwei/qb-auto/clients/animelistnext"
 	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
 	rsyncclient "github.com/ReinforceZwei/qb-auto/clients/rsync"
@@ -101,7 +101,7 @@ func main() {
 			return err
 		}
 
-		animeListClient, err := animelist.New(cfg)
+		animeListClient, err := animelistnext.New(cfg)
 		if err != nil {
 			return err
 		}

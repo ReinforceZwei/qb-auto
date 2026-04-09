@@ -3,7 +3,7 @@ package routes
 import (
 	"net/http"
 
-	"github.com/ReinforceZwei/qb-auto/clients/animelist"
+	animelistnext "github.com/ReinforceZwei/qb-auto/clients/animelistnext"
 	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	tmdbclient "github.com/ReinforceZwei/qb-auto/clients/tmdb"
 	wikiclient "github.com/ReinforceZwei/qb-auto/clients/wikipedia"
@@ -21,10 +21,10 @@ type resolveAnimeTitleRequest struct {
 // resolveAnimeTitleResponse is the JSON body returned on success.
 // AnimeListID is omitted from the response when SearchAnimeList was false.
 type resolveAnimeTitleResponse struct {
-	AnimeTitle   string `json:"anime_title"`
-	TMDbID       int    `json:"tmdb_id"`
-	SeasonNumber int    `json:"season_number"`
-	AnimeListID  *int   `json:"anime_list_id,omitempty"`
+	AnimeTitle   string  `json:"anime_title"`
+	TMDbID       int     `json:"tmdb_id"`
+	SeasonNumber int     `json:"season_number"`
+	AnimeListID  *string `json:"anime_list_id,omitempty"`
 }
 
 // RegisterAnimeTitleRoutes registers the resolve-anime-title route on the serve event.
@@ -34,7 +34,7 @@ func RegisterAnimeTitleRoutes(
 	se *core.ServeEvent,
 	llmClient *llm.Client,
 	tmdbClient *tmdbclient.Client,
-	animeListClient *animelist.Client,
+	animeListClient *animelistnext.Client,
 	braveClient *braveclient.Client,
 	wikiClient *wikiclient.Client,
 ) {
@@ -65,14 +65,14 @@ func RegisterAnimeTitleRoutes(
 		}
 
 		if req.SearchAnimeList {
-			records, err := animeListClient.Search(resolved.AnimeTitle)
+			record, err := animeListClient.FindByTMDb(resolved.TMDbID, resolved.SeasonNumber)
 			if err != nil {
 				return e.JSON(http.StatusInternalServerError, map[string]string{
-					"error": "anime list search: " + err.Error(),
+					"error": "anime list lookup: " + err.Error(),
 				})
 			}
-			if len(records) > 0 {
-				id := records[0].ID
+			if record != nil {
+				id := record.ID
 				resp.AnimeListID = &id
 			}
 		}

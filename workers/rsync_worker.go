@@ -3,13 +3,12 @@ package workers
 import (
 	"context"
 	"path"
-	"strconv"
 
 	"github.com/pocketbase/dbx"
 
-	"github.com/ReinforceZwei/qb-auto/clients/animelist"
-	rsyncclient "github.com/ReinforceZwei/qb-auto/clients/rsync"
+	animelistnext "github.com/ReinforceZwei/qb-auto/clients/animelistnext"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
+	rsyncclient "github.com/ReinforceZwei/qb-auto/clients/rsync"
 	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/models"
 	"github.com/pocketbase/pocketbase/core"
@@ -24,7 +23,7 @@ type RsyncWorker struct {
 	cfg             *config.Config
 	quiClient       *quiclient.Client
 	rsyncClient     *rsyncclient.Client
-	animeListClient *animelist.Client
+	animeListClient *animelistnext.Client
 	jobCh           chan string // buffered channel of job record IDs
 }
 
@@ -35,7 +34,7 @@ func NewRsyncWorker(
 	cfg *config.Config,
 	quiClient *quiclient.Client,
 	rsyncClient *rsyncclient.Client,
-	animeListClient *animelist.Client,
+	animeListClient *animelistnext.Client,
 ) *RsyncWorker {
 	return &RsyncWorker{
 		app:             app,
@@ -107,9 +106,9 @@ func (w *RsyncWorker) processJob(ctx context.Context, recordID string) {
 
 	torrentHash := record.GetString("torrent_hash")
 	animeTitle := record.GetString("anime_title")
-	animeListIDStr := record.GetString("anime_list_id")
-	tmdbID := record.GetInt("tmdb_id")
-	tmdbSeason := record.GetInt("tmdb_season")
+	animeListID := record.GetString("anime_list_id")
+	// tmdb_id and tmdb_season are retained on the job record for reference but
+	// not passed to MarkDownloaded — the new API sets downloadStatus by record ID.
 
 	// Resolve the local content path from qui.
 	torrent, err := w.quiClient.GetTorrent(torrentHash)
@@ -148,12 +147,7 @@ func (w *RsyncWorker) processJob(ctx context.Context, recordID string) {
 	}
 
 	// Mark the anime as downloaded in the anime list.
-	animeListID, err := strconv.Atoi(animeListIDStr)
-	if err != nil {
-		w.failJob(record, "invalid anime_list_id "+strconv.Quote(animeListIDStr)+": "+err.Error())
-		return
-	}
-	if err := w.animeListClient.MarkDownloaded(animeListID, tmdbID, tmdbSeason); err != nil {
+	if err := w.animeListClient.MarkDownloaded(animeListID); err != nil {
 		w.failJob(record, "mark downloaded in anime list: "+err.Error())
 		return
 	}

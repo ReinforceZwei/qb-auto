@@ -5,7 +5,7 @@ import (
 
 	"github.com/pocketbase/dbx"
 
-	"github.com/ReinforceZwei/qb-auto/clients/animelist"
+	animelistnext "github.com/ReinforceZwei/qb-auto/clients/animelistnext"
 	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
 	tmdbclient "github.com/ReinforceZwei/qb-auto/clients/tmdb"
@@ -25,7 +25,7 @@ type TitleWorker struct {
 	quiClient       *quiclient.Client
 	llmClient       *llm.Client
 	tmdbClient      *tmdbclient.Client
-	animeListClient *animelist.Client
+	animeListClient *animelistnext.Client
 	// braveClient and wikiClient are optional; when non-nil they enable the
 	// Wikipedia-based fallback for title resolution.
 	braveClient *braveclient.Client
@@ -43,7 +43,7 @@ func NewTitleWorker(
 	quiClient *quiclient.Client,
 	llmClient *llm.Client,
 	tmdbClient *tmdbclient.Client,
-	animeListClient *animelist.Client,
+	animeListClient *animelistnext.Client,
 	braveClient *braveclient.Client,
 	wikiClient *wikiclient.Client,
 ) *TitleWorker {

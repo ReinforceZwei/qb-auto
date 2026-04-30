@@ -136,10 +136,47 @@ func (c *Client) doWithAuth(fn func(token string) (*resty.Response, error)) (*re
 
 // FindByTMDb queries the animes collection for a record matching the given
 // tmdbId and tmdbSeasonNumber. Returns (nil, nil) when no record is found.
+//
+// When the exact season match exists but is already marked "downloaded", it
+// falls back to the first undownloaded record sharing the same tmdbId. This
+// handles cases where the LLM-extracted season number is unreliable (e.g.
+// defaults to 1 but S1 is already downloaded and S2 is the real target).
 func (c *Client) FindByTMDb(tmdbID int, seasonNumber int) (*AnimeRecord, error) {
-	filter := fmt.Sprintf("(tmdbId = %d && tmdbSeasonNumber = %d)", tmdbID, seasonNumber)
-	var result recordListResponse
+	// 1. Try exact (tmdbId + seasonNumber) match.
+	record, err := c.queryOne(fmt.Sprintf("(tmdbId = %d && tmdbSeasonNumber = %d)", tmdbID, seasonNumber))
+	if err != nil {
+		return nil, err
+	}
 
+	// Happy path: exact match found and not yet downloaded.
+	if record != nil && record.DownloadStatus != "downloaded" {
+		return record, nil
+	}
+
+	// 2. Exact match is either missing or already downloaded — query all
+	//    records with the same tmdbId and prefer an undownloaded one.
+	all, err := c.queryAll(fmt.Sprintf("(tmdbId = %d)", tmdbID))
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range all {
+		if all[i].DownloadStatus != "downloaded" {
+			return &all[i], nil
+		}
+	}
+
+	// 3. All records are already downloaded. Return the exact season match
+	//    if we had one (caller can re-mark it idempotently), otherwise nil.
+	if record != nil {
+		return record, nil
+	}
+	return nil, nil
+}
+
+// queryOne fetches at most one record matching the PocketBase filter.
+func (c *Client) queryOne(filter string) (*AnimeRecord, error) {
+	var result recordListResponse
 	resp, err := c.doWithAuth(func(token string) (*resty.Response, error) {
 		return c.http.R().
 			SetHeader("Authorization", token).
@@ -149,16 +186,35 @@ func (c *Client) FindByTMDb(tmdbID int, seasonNumber int) (*AnimeRecord, error) 
 			Get("/api/collections/animes/records")
 	})
 	if err != nil {
-		return nil, fmt.Errorf("animelistnext: find by tmdb: %w", err)
+		return nil, fmt.Errorf("animelistnext: query one: %w", err)
 	}
 	if resp.StatusCode() != 200 {
-		return nil, fmt.Errorf("animelistnext: find by tmdb: status %d", resp.StatusCode())
+		return nil, fmt.Errorf("animelistnext: query one: status %d", resp.StatusCode())
 	}
-
 	if len(result.Items) == 0 {
 		return nil, nil
 	}
 	return &result.Items[0], nil
+}
+
+// queryAll fetches all records matching the PocketBase filter (up to 50).
+func (c *Client) queryAll(filter string) ([]AnimeRecord, error) {
+	var result recordListResponse
+	resp, err := c.doWithAuth(func(token string) (*resty.Response, error) {
+		return c.http.R().
+			SetHeader("Authorization", token).
+			SetQueryParam("filter", filter).
+			SetQueryParam("perPage", "50").
+			SetResult(&result).
+			Get("/api/collections/animes/records")
+	})
+	if err != nil {
+		return nil, fmt.Errorf("animelistnext: query all: %w", err)
+	}
+	if resp.StatusCode() != 200 {
+		return nil, fmt.Errorf("animelistnext: query all: status %d", resp.StatusCode())
+	}
+	return result.Items, nil
 }
 
 // MarkDownloaded sets downloadStatus = "downloaded" on the animes record with

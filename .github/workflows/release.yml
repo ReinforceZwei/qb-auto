@@ -21,12 +21,25 @@ jobs:
         with:
           go-version: '1.25'
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build frontend
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+
       - name: Build binary
         run: |
           VERSION=${{ github.ref_name }}
           COMMIT=$(git rev-parse --short HEAD)
           DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags release \
             -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
             -o qb-auto-linux-amd64 .
           sha256sum qb-auto-linux-amd64 | awk '{print $1}' > qb-auto-linux-amd64.sha256

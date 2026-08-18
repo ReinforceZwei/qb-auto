@@ -17,6 +17,7 @@ import (
 	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/llm"
 	"github.com/ReinforceZwei/qb-auto/routes"
+	"github.com/ReinforceZwei/qb-auto/ui"
 	"github.com/ReinforceZwei/qb-auto/workers"
 	"github.com/joho/godotenv"
 	"github.com/pocketbase/pocketbase"
@@ -86,6 +87,10 @@ func main() {
 		}
 
 		routes.RegisterTorrentRoutes(se, cfg)
+		routes.RegisterJobRoutes(se)
+
+		// Serve the embedded web UI (SPA) on all non-API routes.
+		registerFrontend(se, ui.Dist())
 
 		ctx := context.Background()
 

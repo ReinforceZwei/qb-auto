@@ -33,3 +33,9 @@ go.work.sum
 
 # Pocketbase data
 pb_data/
+
+# Frontend build output (built in CI for releases, never committed)
+ui/dist/
+
+# Local frontend env overrides (e.g. VITE_PB_URL for dev)
+ui/.env.local

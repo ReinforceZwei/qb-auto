@@ -4,14 +4,14 @@ import (
 	"context"
 	"path"
 
-	"github.com/pocketbase/dbx"
+	"ganigeorgiev.com/pocketbase/dbx"
 
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	animelistnext "github.com/ReinforceZwei/qb-auto/clients/animelistnext"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
 	rsyncclient "github.com/ReinforceZwei/qb-auto/clients/rsync"
 	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/models"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 // RsyncWorker processes pending_rsync jobs with a single goroutine. It copies

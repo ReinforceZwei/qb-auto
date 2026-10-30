@@ -3,13 +3,13 @@ package routes
 import (
 	"net/http"
 
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	animelistnext "github.com/ReinforceZwei/qb-auto/clients/animelistnext"
 	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	tmdbclient "github.com/ReinforceZwei/qb-auto/clients/tmdb"
 	wikiclient "github.com/ReinforceZwei/qb-auto/clients/wikipedia"
 	"github.com/ReinforceZwei/qb-auto/llm"
 	"github.com/ReinforceZwei/qb-auto/services"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 // resolveAnimeTitleRequest is the JSON body accepted by POST /api/resolve-anime-title.

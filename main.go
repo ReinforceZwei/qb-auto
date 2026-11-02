@@ -7,6 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"ganigeorgiev.com/pocketbase/pocketbase"
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
+	"ganigeorgiev.com/pocketbase/pocketbase/plugins/migratecmd"
+	"ganigeorgiev.com/pocketbase/pocketbase/tools/osutils"
 	"github.com/ReinforceZwei/qb-auto/clients/animelistnext"
 	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
@@ -20,10 +24,6 @@ import (
 	"github.com/ReinforceZwei/qb-auto/ui"
 	"github.com/ReinforceZwei/qb-auto/workers"
 	"github.com/joho/godotenv"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/plugins/migratecmd"
-	"github.com/pocketbase/pocketbase/tools/osutils"
 
 	_ "github.com/ReinforceZwei/qb-auto/migrations"
 )

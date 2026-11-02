@@ -3,9 +3,9 @@ package routes
 import (
 	"net/http"
 
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"github.com/ReinforceZwei/qb-auto/config"
 	"github.com/ReinforceZwei/qb-auto/services"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 // RegisterTorrentRoutes registers torrent-related API routes on the serve event.

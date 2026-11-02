@@ -3,8 +3,8 @@ package main
 import (
 	"io/fs"
 
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
+	"ganigeorgiev.com/pocketbase/pocketbase/apis"
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
 )
 
 // registerFrontend serves the embedded SPA on all non-API routes.

@@ -1,9 +1,9 @@
 package services
 
 import (
+	"ganigeorgiev.com/pocketbase/dbx"
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	"github.com/ReinforceZwei/qb-auto/models"
-	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 // CreateJob inserts a new job record for the given torrent hash and category.

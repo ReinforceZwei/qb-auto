@@ -3,8 +3,9 @@ package workers
 import (
 	"context"
 
-	"github.com/pocketbase/dbx"
+	"ganigeorgiev.com/pocketbase/dbx"
 
+	"ganigeorgiev.com/pocketbase/pocketbase/core"
 	animelistnext "github.com/ReinforceZwei/qb-auto/clients/animelistnext"
 	braveclient "github.com/ReinforceZwei/qb-auto/clients/brave"
 	quiclient "github.com/ReinforceZwei/qb-auto/clients/qui"
@@ -14,7 +15,6 @@ import (
 	"github.com/ReinforceZwei/qb-auto/llm"
 	"github.com/ReinforceZwei/qb-auto/models"
 	"github.com/ReinforceZwei/qb-auto/services"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 // TitleWorker processes pending jobs to determine the anime title using a pool

@@ -210,6 +210,9 @@ sudo systemctl restart qb-auto@<user>
 
 ### Building
 
+Requires Go 1.27+ (PocketBase v0.41+ is embedded as a library, so the toolchain
+requirement follows PocketBase's own).
+
 ```bash
 go build -o qb-auto .
 ```
